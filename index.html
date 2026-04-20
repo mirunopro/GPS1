@@ -1,1 +1,404 @@
+<!DOCTYPE html>
 
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>散歩記録</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0d1a0d;font-family:'Hiragino Sans',sans-serif;color:#fff;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+#mapArea{
+flex:1;position:relative;overflow:hidden;
+background:#111e11;
+}
+#routeCanvas{width:100%;height:100%;display:block;}
+
+#locDot{
+position:absolute;width:20px;height:20px;
+transform:translate(-50%,-50%);
+pointer-events:none;display:none;
+}
+#locDot::before{
+content:’’;position:absolute;inset:0;
+background:#4ade80;border-radius:50%;
+border:3px solid #fff;
+box-shadow:0 0 0 0 rgba(74,222,128,0.6);
+animation:rpl 2s infinite;
+}
+@keyframes rpl{0%{box-shadow:0 0 0 0 rgba(74,222,128,0.6);}100%{box-shadow:0 0 0 16px rgba(74,222,128,0);}}
+
+#topBar{
+position:absolute;top:12px;left:12px;right:12px;
+display:flex;justify-content:space-between;align-items:center;
+pointer-events:none;z-index:5;
+}
+#michibiki{
+background:rgba(0,0,60,0.85);border-radius:20px;
+padding:6px 12px;font-size:11px;
+border:1px solid rgba(100,100,255,0.4);color:#88aaff;
+}
+#gpsBadge{
+background:rgba(0,0,0,0.75);border-radius:20px;
+padding:6px 12px;font-size:11px;
+border:1px solid rgba(255,255,255,0.15);
+display:flex;align-items:center;gap:6px;
+}
+.dot{width:8px;height:8px;border-radius:50%;background:#555;}
+.dot.on{background:#4ade80;animation:blink 1.5s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.2;}}
+
+#msg{
+position:absolute;top:56px;left:50%;transform:translateX(-50%);
+background:rgba(0,0,0,0.8);border-radius:20px;
+padding:8px 20px;font-size:13px;
+white-space:nowrap;pointer-events:none;
+transition:opacity 0.4s;opacity:0;z-index:5;
+}
+
+#bottomUI{
+background:#0a120a;
+padding:12px 16px 28px;
+border-top:1px solid rgba(255,255,255,0.06);
+}
+#stats{display:flex;gap:10px;margin-bottom:12px;}
+.sb{
+flex:1;background:rgba(255,255,255,0.06);
+border-radius:12px;padding:10px;text-align:center;
+border:1px solid rgba(255,255,255,0.08);
+}
+.sv{font-size:22px;font-weight:700;color:#4ade80;letter-spacing:1px;}
+.sl{font-size:10px;color:#666;margin-top:2px;}
+
+#btns{display:flex;gap:10px;}
+#btnStart{
+flex:1;height:54px;border-radius:14px;border:none;
+background:linear-gradient(135deg,#22c55e,#16a34a);
+color:#fff;font-size:16px;font-weight:700;
+-webkit-appearance:none;cursor:pointer;
+}
+#btnStop{
+flex:1;height:54px;border-radius:14px;border:none;
+background:linear-gradient(135deg,#ef4444,#dc2626);
+color:#fff;font-size:16px;font-weight:700;
+-webkit-appearance:none;cursor:pointer;display:none;
+}
+#btnClear{
+width:54px;height:54px;border-radius:14px;border:none;
+background:rgba(255,255,255,0.08);color:#888;
+font-size:18px;-webkit-appearance:none;cursor:pointer;
+}
+
+/* ズームボタン */
+#zoomBtns{
+position:absolute;right:12px;bottom:12px;
+display:flex;flex-direction:column;gap:6px;z-index:5;
+}
+.zbtn{
+width:40px;height:40px;border-radius:10px;border:none;
+background:rgba(0,0,0,0.7);color:#fff;font-size:20px;
+-webkit-appearance:none;cursor:pointer;
+border:1px solid rgba(255,255,255,0.15);
+}
+</style>
+
+</head>
+<body>
+
+<div id="mapArea">
+  <canvas id="routeCanvas"></canvas>
+  <div id="locDot"></div>
+  <div id="topBar">
+    <div id="michibiki">🛰 みちびき対応GPS</div>
+    <div id="gpsBadge"><div class="dot" id="gpsDot"></div><span id="gpsText">GPS待機</span></div>
+  </div>
+  <div id="msg"></div>
+  <div id="zoomBtns">
+    <button class="zbtn" onclick="changeZoom(1)">+</button>
+    <button class="zbtn" onclick="changeZoom(-1)">−</button>
+  </div>
+</div>
+
+<div id="bottomUI">
+  <div id="stats">
+    <div class="sb"><div class="sv" id="distVal">0.00</div><div class="sl">距離 km</div></div>
+    <div class="sb"><div class="sv" id="timeVal">00:00</div><div class="sl">時間</div></div>
+    <div class="sb"><div class="sv" id="paceVal">--'--"</div><div class="sl">ペース/km</div></div>
+  </div>
+  <div id="btns">
+    <button id="btnStart" onclick="startWalk()">▶ スタート</button>
+    <button id="btnStop"  onclick="stopWalk()">■ ストップ</button>
+    <button id="btnClear" onclick="clearAll()">🗑</button>
+  </div>
+</div>
+
+<script>
+var canvas = document.getElementById('routeCanvas');
+var ctx = canvas.getContext('2d');
+var mapArea = document.getElementById('mapArea');
+
+// 地図状態
+var map = {
+  centerLat: 35.6812,
+  centerLng: 139.7671,
+  zoom: 17,
+  metersPerPx: 1
+};
+
+// 歩行データ
+var path = [];
+var currentPos = null;
+var walking = false;
+var watchId = null;
+var startTime = null;
+var timer = null;
+var totalKm = 0;
+
+function resize() {
+  canvas.width = mapArea.clientWidth;
+  canvas.height = mapArea.clientHeight;
+  updateMetersPerPx();
+  render();
+}
+
+function updateMetersPerPx() {
+  // ズームレベルに対するm/px
+  map.metersPerPx = 156543.03 * Math.cos(map.centerLat * Math.PI/180) / Math.pow(2, map.zoom);
+}
+
+function latLngToXY(lat, lng) {
+  var W = canvas.width, H = canvas.height;
+  var mpx = map.metersPerPx;
+  var latRad = lat * Math.PI / 180;
+  var cLatRad = map.centerLat * Math.PI / 180;
+  var dlng = lng - map.centerLng;
+  var dlat = lat - map.centerLat;
+  // メルカトル補正
+  var mLat = Math.log(Math.tan(Math.PI/4 + latRad/2));
+  var mCLat = Math.log(Math.tan(Math.PI/4 + cLatRad/2));
+  var R = 6378137;
+  var dx = dlng * Math.PI/180 * R * Math.cos(cLatRad);
+  var dy = (mLat - mCLat) * R;
+  return {
+    x: W/2 + dx/mpx,
+    y: H/2 - dy/mpx
+  };
+}
+
+function render() {
+  var W = canvas.width, H = canvas.height;
+  // 背景グリッド
+  ctx.fillStyle = '#111e11';
+  ctx.fillRect(0,0,W,H);
+
+  // グリッド線
+  ctx.strokeStyle = 'rgba(74,222,128,0.06)';
+  ctx.lineWidth = 1;
+  var grid = 80;
+  for(var x=0;x<W;x+=grid){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<H;y+=grid){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // スケール表示
+  var scaleM = map.metersPerPx * 100;
+  var scaleLabel = scaleM >= 1000 ? (scaleM/1000).toFixed(1)+'km' : Math.round(scaleM)+'m';
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillRect(12, H-30, 100, 2);
+  ctx.font = '10px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.textAlign = 'left';
+  ctx.fillText(scaleLabel, 12, H-16);
+
+  // ルート描画
+  if(path.length > 1){
+    ctx.beginPath();
+    var p0 = latLngToXY(path[0].lat, path[0].lng);
+    ctx.moveTo(p0.x, p0.y);
+    for(var i=1;i<path.length;i++){
+      var p = latLngToXY(path[i].lat, path[i].lng);
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.strokeStyle = 'rgba(74,222,128,0.35)';
+    ctx.lineWidth = 12;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // スタートマーク
+    var ps = latLngToXY(path[0].lat, path[0].lng);
+    ctx.beginPath();
+    ctx.arc(ps.x, ps.y, 7, 0, Math.PI*2);
+    ctx.fillStyle = '#22c55e';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // 現在地マーカー
+  if(currentPos){
+    var cp = latLngToXY(currentPos.lat, currentPos.lng);
+    // 波紋
+    ctx.beginPath();
+    ctx.arc(cp.x, cp.y, 20, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(74,222,128,0.15)';
+    ctx.fill();
+    // 本体
+    ctx.beginPath();
+    ctx.arc(cp.x, cp.y, 9, 0, Math.PI*2);
+    ctx.fillStyle = '#4ade80';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+}
+
+// タッチドラッグ
+var drag = {active:false, lx:0, ly:0};
+canvas.addEventListener('touchstart', function(e){
+  if(e.touches.length===1){
+    drag.active=true;
+    drag.lx=e.touches[0].clientX;
+    drag.ly=e.touches[0].clientY;
+  }
+},{passive:true});
+canvas.addEventListener('touchmove', function(e){
+  if(drag.active && e.touches.length===1){
+    var dx=e.touches[0].clientX-drag.lx;
+    var dy=e.touches[0].clientY-drag.ly;
+    map.centerLng -= dx * map.metersPerPx / (6378137 * Math.cos(map.centerLat*Math.PI/180)) * 180/Math.PI;
+    var R=6378137;
+    var latRad=map.centerLat*Math.PI/180;
+    var mercY=Math.log(Math.tan(Math.PI/4+latRad/2));
+    mercY += dy*map.metersPerPx/R;
+    map.centerLat=(2*Math.atan(Math.exp(mercY))-Math.PI/2)*180/Math.PI;
+    drag.lx=e.touches[0].clientX;
+    drag.ly=e.touches[0].clientY;
+    render();
+  }
+},{passive:true});
+canvas.addEventListener('touchend',function(){drag.active=false;},{passive:true});
+
+function changeZoom(delta){
+  map.zoom = Math.max(13, Math.min(20, map.zoom+delta));
+  updateMetersPerPx();
+  render();
+}
+
+function showMsg(txt, ms){
+  var el=document.getElementById('msg');
+  el.textContent=txt;
+  el.style.opacity=1;
+  setTimeout(function(){el.style.opacity=0;}, ms||2500);
+}
+
+function startWalk(){
+  if(!navigator.geolocation){showMsg('GPSが使えません',3000);return;}
+  walking=true; path=[]; totalKm=0; startTime=Date.now();
+  document.getElementById('btnStart').style.display='none';
+  document.getElementById('btnStop').style.display='flex';
+  document.getElementById('gpsDot').className='dot on';
+  document.getElementById('gpsText').textContent='記録中';
+  showMsg('🚶 スタート！歩き始めてください');
+  timer=setInterval(tickTimer,1000);
+  watchId=navigator.geolocation.watchPosition(onGPS, onGPSErr,
+    {enableHighAccuracy:true, timeout:15000, maximumAge:0});
+}
+
+function stopWalk(){
+  walking=false;
+  if(watchId)navigator.geolocation.clearWatch(watchId);
+  clearInterval(timer);
+  document.getElementById('btnStart').style.display='flex';
+  document.getElementById('btnStop').style.display='none';
+  document.getElementById('gpsDot').className='dot';
+  document.getElementById('gpsText').textContent='停止';
+  showMsg('🏁 '+totalKm.toFixed(2)+'km 完了！', 4000);
+}
+
+function clearAll(){
+  path=[]; totalKm=0;
+  document.getElementById('distVal').textContent='0.00';
+  document.getElementById('timeVal').textContent='00:00';
+  document.getElementById('paceVal').textContent="--'--\"";
+  render();
+  showMsg('クリアしました');
+}
+
+function onGPS(pos){
+  var lat=pos.coords.latitude;
+  var lng=pos.coords.longitude;
+  var acc=Math.round(pos.coords.accuracy);
+  document.getElementById('gpsText').textContent='±'+acc+'m';
+  currentPos={lat:lat,lng:lng};
+  map.centerLat=lat; map.centerLng=lng;
+  updateMetersPerPx();
+  if(walking){
+    if(path.length>0){
+      var last=path[path.length-1];
+      var d=haversine(last.lat,last.lng,lat,lng);
+      if(d>0.003 && d<0.3){
+        totalKm+=d;
+        path.push({lat:lat,lng:lng});
+        document.getElementById('distVal').textContent=totalKm.toFixed(2);
+      }
+    } else {
+      path.push({lat:lat,lng:lng});
+    }
+  }
+  render();
+}
+
+function onGPSErr(e){
+  showMsg('GPSエラー: '+e.message, 3000);
+}
+
+function tickTimer(){
+  if(!startTime)return;
+  var s=Math.floor((Date.now()-startTime)/1000);
+  var m=Math.floor(s/60), ss=s%60;
+  document.getElementById('timeVal').textContent=(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+  if(totalKm>0.05){
+    var pps=s/totalKm;
+    var pm=Math.floor(pps/60), ps=Math.floor(pps%60);
+    document.getElementById('paceVal').textContent=pm+"'"+(ps<10?'0':'')+ps+'"';
+  }
+}
+
+function haversine(lat1,lng1,lat2,lng2){
+  var R=6371;
+  var dLat=(lat2-lat1)*Math.PI/180;
+  var dLng=(lng2-lng1)*Math.PI/180;
+  var a=Math.sin(dLat/2)*Math.sin(dLat/2)+
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+    Math.sin(dLng/2)*Math.sin(dLng/2);
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// 起動時GPS取得
+if(navigator.geolocation){
+  navigator.geolocation.getCurrentPosition(function(pos){
+    map.centerLat=pos.coords.latitude;
+    map.centerLng=pos.coords.longitude;
+    currentPos={lat:pos.coords.latitude,lng:pos.coords.longitude};
+    updateMetersPerPx();
+    render();
+    showMsg('📍 現在地を取得しました');
+  },function(){
+    render();
+    showMsg('現在地を取得できませんでした',3000);
+  },{enableHighAccuracy:true,timeout:10000});
+} else {
+  render();
+}
+
+window.addEventListener('resize',resize);
+resize();
+</script>
+
+</body>
+</html>
