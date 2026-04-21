@@ -114,14 +114,14 @@ function toggleOldMap() {
   if (currentTileMode === 'modern') {
     map.removeLayer(modernTile);
     oldTile = L.tileLayer(
-      'https://maps.gsi.go.jp/xyz/meiji/{z}/{x}/{y}.png',
-      {maxZoom:16, crossOrigin:true, opacity:1.0}
+      'https://maps.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg',
+      {maxZoom:18, opacity:1.0}
     );
     oldTile.addTo(map);
     if (map.getZoom() > 16) map.setZoom(16);
     currentTileMode = 'old';
     btn.style.background = 'linear-gradient(135deg,#dc2626,#b91c1c)';
-    showMsg('🗺 明治時代の地図に切替', 2500);
+    showMsg('🗺 空中写真（1970年代）に切替', 2500);
   } else {
     map.removeLayer(oldTile);
     modernTile.addTo(map);
