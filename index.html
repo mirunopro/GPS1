@@ -110,11 +110,17 @@ var modernTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
 });
 var oldTile = null;
 
+// 昭和初期・70年代タイルを最初に作成（使い回す）
+var meijiTile = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/gazo1/{z}/{x}/{y}.jpg', {
+  maxZoom:22, maxNativeZoom:17, opacity:1.0
+});
+var ortTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg', {
+  maxZoom:22, maxNativeZoom:18, opacity:1.0
+});
+
 var meijiVisible = false;
 var ortVisible = false;
 modernTile.addTo(map);
-var meijiTile = null;
-var ortTileLayer = null;
 
 function toggleMeiji() {
   var btn = document.getElementById('btnOldMap');
@@ -125,11 +131,9 @@ function toggleMeiji() {
     if (!ortVisible) modernTile.addTo(map);
     showMsg('昭和初期の写真を非表示', 2000);
   } else {
-    if (!ortVisible) map.removeLayer(modernTile);
     if (ortVisible) { map.removeLayer(ortTileLayer); ortVisible = false; document.getElementById('btnOrt').style.opacity='1'; }
-    meijiTile = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/gazo1/{z}/{x}/{y}.jpg', {maxZoom:17, opacity:1.0});
+    map.removeLayer(modernTile);
     meijiTile.addTo(map);
-    if (map.getZoom() > 17) map.setZoom(17);
     meijiVisible = true;
     btn.style.opacity = '0.5';
     showMsg('🗺 昭和初期の空中写真に切替', 2500);
@@ -145,9 +149,8 @@ function toggleOrt() {
     if (!meijiVisible) modernTile.addTo(map);
     showMsg('空中写真を非表示', 2000);
   } else {
-    if (!meijiVisible) map.removeLayer(modernTile);
     if (meijiVisible) { map.removeLayer(meijiTile); meijiVisible = false; document.getElementById('btnOldMap').style.opacity='1'; }
-    ortTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg', {maxZoom:18, opacity:1.0});
+    map.removeLayer(modernTile);
     ortTileLayer.addTo(map);
     ortVisible = true;
     btn.style.opacity = '0.5';
