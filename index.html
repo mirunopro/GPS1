@@ -133,8 +133,8 @@ var taishoVisible = false;
 var showaVisible = false;
 var nightVisible = false;
 
-// 夜間光マップ（NASA VIIRS 2016年）
-var nightTile = L.tileLayer('https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_Black_Marble/default/2016-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg', {
+// 夜間光マップ（NASA GIBS - VIIRS Black Marble）
+var nightTile = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2023-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg', {
   maxZoom:22, maxNativeZoom:8, opacity:1.0
 });
 
