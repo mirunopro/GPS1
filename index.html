@@ -83,7 +83,7 @@ border-top:1px solid #333;
   <div id="btns">
     <button id="btnStart" onclick="startWalk()">▶ スタート</button>
     <button id="btnStop"  onclick="stopWalk()">■ ストップ</button>
-    <button id="btnOldMap" onclick="toggleMeiji()">昭和初期</button>
+    <button id="btnOldMap" onclick="toggleMeiji()">60年代</button>
     <button id="btnOrt" onclick="toggleOrt()">70年代</button>
     <button id="btnClear" onclick="clearAll()">🗑</button>
   </div>
@@ -110,12 +110,13 @@ var modernTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
 });
 var oldTile = null;
 
-// 昭和初期・70年代タイルを最初に作成（使い回す）
-var meijiTile = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/gazo1/{z}/{x}/{y}.jpg', {
+// 空中写真タイル（正確な年代）
+// ort_old10 = 1961〜1969年、gazo1 = 1974〜1978年
+var meijiTile = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/ort_old10/{z}/{x}/{y}.png', {
   maxZoom:22, maxNativeZoom:17, opacity:1.0
 });
-var ortTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg', {
-  maxZoom:22, maxNativeZoom:18, opacity:1.0
+var ortTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/gazo1/{z}/{x}/{y}.jpg', {
+  maxZoom:22, maxNativeZoom:17, opacity:1.0
 });
 
 var meijiVisible = false;
@@ -136,7 +137,7 @@ function toggleMeiji() {
     meijiTile.addTo(map);
     meijiVisible = true;
     btn.style.opacity = '0.5';
-    showMsg('🗺 昭和初期の空中写真に切替', 2500);
+    showMsg('🗺 1961〜1969年の空中写真に切替', 2500);
   }
 }
 
@@ -154,7 +155,7 @@ function toggleOrt() {
     ortTileLayer.addTo(map);
     ortVisible = true;
     btn.style.opacity = '0.5';
-    showMsg('📷 1970年代の空中写真に切替', 2500);
+    showMsg('📷 1974〜1978年の空中写真に切替', 2500);
   }
 }
 
