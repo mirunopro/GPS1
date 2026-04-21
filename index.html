@@ -51,7 +51,8 @@ border-top:1px solid #333;
 #btnStart{flex:1;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-size:16px;font-weight:700;-webkit-appearance:none;cursor:pointer;}
 #btnStop{flex:1;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;font-size:16px;font-weight:700;-webkit-appearance:none;cursor:pointer;display:none;}
 #btnSpot{width:54px;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:22px;-webkit-appearance:none;cursor:pointer;}
-#btnOldMap{width:54px;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#78350f,#92400e);color:#fff;font-size:22px;-webkit-appearance:none;cursor:pointer;}
+#btnOldMap{width:54px;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#92400e,#78350f);color:#fff;font-size:11px;font-weight:bold;-webkit-appearance:none;cursor:pointer;}
+#btnOrt{width:54px;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#1d4ed8,#1e3a8a);color:#fff;font-size:10px;font-weight:bold;-webkit-appearance:none;cursor:pointer;}
 #btnClear{width:54px;height:54px;border-radius:14px;border:none;background:#2a2a2a;color:#888;font-size:18px;-webkit-appearance:none;cursor:pointer;}
 </style>
 
@@ -84,7 +85,8 @@ border-top:1px solid #333;
   <div id="btns">
     <button id="btnStart" onclick="startWalk()">▶ スタート</button>
     <button id="btnStop"  onclick="stopWalk()">■ ストップ</button>
-    <button id="btnOldMap" onclick="toggleOldMap()">🗺</button>
+    <button id="btnOldMap" onclick="toggleMeiji()">明治</button>
+    <button id="btnOrt" onclick="toggleOrt()">70年代</button>
     <button id="btnClear" onclick="clearAll()">🗑</button>
   </div>
 </div>
@@ -106,28 +108,48 @@ var modernTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
 });
 var oldTile = null;
 
-var currentTileMode = 'modern'; // modern / old
+var meijiVisible = false;
+var ortVisible = false;
 modernTile.addTo(map);
+var meijiTile = null;
+var ortTileLayer = null;
 
-function toggleOldMap() {
+function toggleMeiji() {
   var btn = document.getElementById('btnOldMap');
-  if (currentTileMode === 'modern') {
-    map.removeLayer(modernTile);
-    oldTile = L.tileLayer(
-      'https://maps.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg',
-      {maxZoom:18, opacity:1.0}
-    );
-    oldTile.addTo(map);
-    if (map.getZoom() > 16) map.setZoom(16);
-    currentTileMode = 'old';
-    btn.style.background = 'linear-gradient(135deg,#dc2626,#b91c1c)';
-    showMsg('🗺 空中写真（1970年代）に切替', 2500);
+  if (meijiVisible) {
+    map.removeLayer(meijiTile);
+    meijiVisible = false;
+    btn.style.opacity = '1';
+    if (!ortVisible) modernTile.addTo(map);
+    showMsg('明治地図を非表示', 2000);
   } else {
-    map.removeLayer(oldTile);
-    modernTile.addTo(map);
-    currentTileMode = 'modern';
-    btn.style.background = 'linear-gradient(135deg,#78350f,#92400e)';
-    showMsg('🗺 現代の地図に切替', 2500);
+    if (!ortVisible) map.removeLayer(modernTile);
+    if (ortVisible) { map.removeLayer(ortTileLayer); ortVisible = false; document.getElementById('btnOrt').style.opacity='1'; }
+    meijiTile = L.tileLayer('https://maps.gsi.go.jp/xyz/meiji/{z}/{x}/{y}.png', {maxZoom:16, opacity:1.0});
+    meijiTile.addTo(map);
+    if (map.getZoom() > 16) map.setZoom(16);
+    meijiVisible = true;
+    btn.style.opacity = '0.5';
+    showMsg('🗺 明治時代の地図に切替', 2500);
+  }
+}
+
+function toggleOrt() {
+  var btn = document.getElementById('btnOrt');
+  if (ortVisible) {
+    map.removeLayer(ortTileLayer);
+    ortVisible = false;
+    btn.style.opacity = '1';
+    if (!meijiVisible) modernTile.addTo(map);
+    showMsg('空中写真を非表示', 2000);
+  } else {
+    if (!meijiVisible) map.removeLayer(modernTile);
+    if (meijiVisible) { map.removeLayer(meijiTile); meijiVisible = false; document.getElementById('btnOldMap').style.opacity='1'; }
+    ortTileLayer = L.tileLayer('https://maps.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg', {maxZoom:18, opacity:1.0});
+    ortTileLayer.addTo(map);
+    ortVisible = true;
+    btn.style.opacity = '0.5';
+    showMsg('📷 1970年代の空中写真に切替', 2500);
   }
 }
 
