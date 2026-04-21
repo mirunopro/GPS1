@@ -305,9 +305,6 @@ var camIcon = L.divIcon({
 });
 
 function loadCams() {
-  var center = map.getCenter();
-  var lat = center.lat, lng = center.lng;
-
   if (camsVisible) {
     for (var i=0; i<camMarkers.length; i++) map.removeLayer(camMarkers[i]);
     camMarkers = [];
@@ -316,75 +313,38 @@ function loadCams() {
     showMsg('カメラを非表示にしました');
     return;
   }
-
-  showMsg('📷 ライブカメラを検索中...', 4000);
-
-  // Overpass APIで公開カメラを取得
-  var r = 3000; // 3km圏内
-  var query = '[out:json][timeout:15];('
-    + 'node["man_made"="surveillance"]["surveillance:type"="outdoor"](around:'+r+','+lat+','+lng+');'
-    + 'node["man_made"="surveillance"]["access"="yes"](around:'+r+','+lat+','+lng+');'
-    + 'node["man_made"="surveillance"]["surveillance"="public"](around:'+r+','+lat+','+lng+');'
-    + ');out body;';
-
-  var url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
-
-  fetch(url)
-    .then(function(res){ return res.json(); })
-    .then(function(data) {
-      var found = 0;
-
-      if (data.elements) {
-        for (var i=0; i<data.elements.length; i++) {
-          var el = data.elements[i];
-          if (!el.lat || !el.lon) continue;
-          var name = el.tags.name || el.tags.description || 'ライブカメラ';
-          var url2 = el.tags.url || el.tags.website || null;
-
-          var popup = '<div style="font-size:14px;font-weight:bold;color:#333;">📷 '+name+'</div>';
-          if (url2) {
-            popup += '<div style="margin-top:6px;"><a href="'+url2+'" target="_blank" style="color:#2563eb;font-size:12px;">▶ カメラを見る</a></div>';
-          } else {
-            popup += '<div style="font-size:11px;color:#999;margin-top:4px;">映像リンクなし</div>';
-          }
-
-          var m = L.marker([el.lat, el.lon], {icon: camIcon}).addTo(map);
-          m.bindPopup(popup, {maxWidth:220});
-          camMarkers.push(m);
-          found++;
-        }
-      }
-
-      // OpenStreetMapで見つからない場合、国交省の主要カメラを手動で補完
-      if (found === 0) {
-        addPublicCams(lat, lng);
-      } else {
-        camsVisible = true;
-        document.getElementById('btnSpot').style.opacity = '0.5';
-        showMsg('📷 '+found+'件のカメラを表示', 3000);
-      }
-    })
-    .catch(function() {
-      addPublicCams(lat, lng);
-    });
+  // 必ず公開カメラを表示
+  var center = map.getCenter();
+  addPublicCams(center.lat, center.lng);
 }
 
-// 国交省・気象庁の主要公開カメラ（全国の代表的なもの）
+// 国交省・気象庁の主要公開カメラ（全国）
 var PUBLIC_CAMS = [
-  {lat:35.6586,lng:139.7454,name:'東京タワー周辺（国交省）',url:'https://www.kensetsu.metro.tokyo.lg.jp/content/000051346.pdf'},
-  {lat:35.0116,lng:135.7681,name:'京都・鴨川ライブカメラ',url:'https://www.city.kyoto.lg.jp/kankyo/page/0000290369.html'},
-  {lat:34.6937,lng:135.5023,name:'大阪・道頓堀（国交省）',url:'https://www.kkr.mlit.go.jp/osaka/road/camera/'},
-  {lat:35.3606,lng:138.7274,name:'富士山ライブカメラ（気象庁）',url:'https://www.jma.go.jp/bosai/nowc/'},
-  {lat:43.0642,lng:141.3469,name:'札幌・大通公園（国交省）',url:'https://www.hkd.mlit.go.jp/rs/douro/camera/'},
-  {lat:26.2124,lng:127.6792,name:'那覇・国際通り',url:'https://www.dc.ogb.go.jp/douro/camera/'},
-  {lat:38.2688,lng:140.8721,name:'仙台・広瀬川（国交省河川）',url:'https://www.thr.mlit.go.jp/river/bousai/pc/'},
-  {lat:33.5904,lng:130.4017,name:'福岡・那珂川（河川カメラ）',url:'https://www.qsr.mlit.go.jp/chikugo/bousai/camera/'},
+  {lat:35.6762,lng:139.6503,name:'首都高速ライブカメラ',url:'https://www.shutoko.jp/use/traffic-info/camera/'},
+  {lat:35.6586,lng:139.7454,name:'東京・日本橋付近（国交省）',url:'https://www.ktr.mlit.go.jp/road/camera/'},
   {lat:35.4437,lng:139.6380,name:'横浜・鶴見川（国交省）',url:'https://www.ktr.mlit.go.jp/keihin/keihin00213.html'},
+  {lat:35.5494,lng:139.7798,name:'多摩川ライブカメラ（国交省）',url:'https://www.ktr.mlit.go.jp/keikyu/keikyu00217.html'},
+  {lat:35.8617,lng:139.6455,name:'荒川ライブカメラ（国交省）',url:'https://www.ktr.mlit.go.jp/arajo/arajo00198.html'},
+  {lat:35.0116,lng:135.7681,name:'京都・鴨川（国交省）',url:'https://www.kkr.mlit.go.jp/kyoto/camera/'},
+  {lat:34.6937,lng:135.5023,name:'大阪・淀川（国交省）',url:'https://www.kkr.mlit.go.jp/yodogawa/camera/'},
+  {lat:34.6895,lng:135.1957,name:'神戸・六甲山系河川（国交省）',url:'https://www.kkr.mlit.go.jp/kobe/camera/'},
+  {lat:35.1815,lng:136.9066,name:'名古屋・庄内川（国交省）',url:'https://www.cbr.mlit.go.jp/tokai/camera/'},
+  {lat:35.1167,lng:138.9300,name:'富士川ライブカメラ（国交省）',url:'https://www.cbr.mlit.go.jp/fujisabo/camera/'},
+  {lat:34.9756,lng:138.3830,name:'静岡・安倍川（国交省）',url:'https://www.cbr.mlit.go.jp/shizuoka/camera/'},
+  {lat:35.3606,lng:138.7274,name:'富士山ライブカメラ（気象庁）',url:'https://www.data.jma.go.jp/svd/volcam/data/volcam.html'},
+  {lat:31.5930,lng:130.6572,name:'桜島ライブカメラ（気象庁）',url:'https://www.data.jma.go.jp/svd/volcam/data/volcam.html'},
+  {lat:32.8840,lng:130.8592,name:'阿蘇山ライブカメラ（気象庁）',url:'https://www.data.jma.go.jp/svd/volcam/data/volcam.html'},
+  {lat:38.2688,lng:140.8721,name:'仙台・広瀬川（国交省）',url:'https://www.thr.mlit.go.jp/river/bousai/pc/'},
+  {lat:39.7036,lng:141.1527,name:'北上川ライブカメラ（国交省）',url:'https://www.thr.mlit.go.jp/kitakami/camera/'},
+  {lat:43.0642,lng:141.3469,name:'札幌・豊平川（国交省）',url:'https://www.hkd.mlit.go.jp/sp/river_bousai/camera/'},
+  {lat:33.5904,lng:130.4017,name:'福岡・那珂川（国交省）',url:'https://www.qsr.mlit.go.jp/chikugo/bousai/camera/'},
   {lat:34.3853,lng:132.4553,name:'広島・太田川（国交省）',url:'https://www.cgr.mlit.go.jp/chugoku/camera/'},
+  {lat:33.8395,lng:132.7657,name:'高知・仁淀川（国交省）',url:'https://www.skr.mlit.go.jp/kochi/camera/'},
+  {lat:26.2124,lng:127.6792,name:'那覇・漫湖（国交省）',url:'https://www.dc.ogb.go.jp/douro/camera/'},
+  {lat:35.4592,lng:136.7305,name:'名神高速（NEXCO中日本）',url:'https://www.c-nexco.co.jp/traffic/camera/'},
 ];
 
 function addPublicCams(centerLat, centerLng) {
-  // 現在地から近い順に並べる
   var sorted = PUBLIC_CAMS.slice().sort(function(a,b) {
     var da = Math.sqrt(Math.pow(a.lat-centerLat,2)+Math.pow(a.lng-centerLng,2));
     var db = Math.sqrt(Math.pow(b.lat-centerLat,2)+Math.pow(b.lng-centerLng,2));
@@ -394,8 +354,8 @@ function addPublicCams(centerLat, centerLng) {
   for (var i=0; i<sorted.length; i++) {
     var c = sorted[i];
     var popup = '<div style="font-size:13px;font-weight:bold;color:#333;">📷 '+c.name+'</div>'
-      + '<div style="margin-top:6px;"><a href="'+c.url+'" target="_blank" style="color:#2563eb;font-size:12px;font-weight:bold;">▶ カメラページを開く</a></div>'
-      + '<div style="font-size:10px;color:#999;margin-top:3px;">外部サイトへ移動します</div>';
+      + '<div style="margin-top:8px;"><a href="'+c.url+'" target="_blank" style="display:block;background:#2563eb;color:#fff;text-align:center;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:bold;text-decoration:none;">▶ カメラを見る</a></div>'
+      + '<div style="font-size:10px;color:#999;margin-top:4px;text-align:center;">外部サイトへ移動</div>';
     var m = L.marker([c.lat, c.lng], {icon: camIcon}).addTo(map);
     m.bindPopup(popup, {maxWidth:240});
     camMarkers.push(m);
@@ -403,7 +363,11 @@ function addPublicCams(centerLat, centerLng) {
 
   camsVisible = true;
   document.getElementById('btnSpot').style.opacity = '0.5';
-  showMsg('📷 公開ライブカメラを表示しました', 3000);
+  // 一番近いカメラに地図移動
+  if (sorted.length > 0) {
+    map.setView([sorted[0].lat, sorted[0].lng], 13);
+  }
+  showMsg('📷 '+sorted.length+'件の公開カメラを表示', 3000);
 }
 
 // 起動時GPS取得 + ルート復元
