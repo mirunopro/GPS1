@@ -85,7 +85,7 @@ border-top:1px solid #333;
   <div id="btns">
     <button id="btnStart" onclick="startWalk()">▶ スタート</button>
     <button id="btnStop"  onclick="stopWalk()">■ ストップ</button>
-    <button id="btnOldMap" onclick="toggleMeiji()">明治</button>
+    <button id="btnOldMap" onclick="toggleMeiji()">古地図</button>
     <button id="btnOrt" onclick="toggleOrt()">70年代</button>
     <button id="btnClear" onclick="clearAll()">🗑</button>
   </div>
@@ -125,12 +125,12 @@ function toggleMeiji() {
   } else {
     if (!ortVisible) map.removeLayer(modernTile);
     if (ortVisible) { map.removeLayer(ortTileLayer); ortVisible = false; document.getElementById('btnOrt').style.opacity='1'; }
-    meijiTile = L.tileLayer('https://maps.gsi.go.jp/xyz/meiji/{z}/{x}/{y}.png', {maxZoom:16, opacity:1.0});
+    meijiTile = L.tileLayer('https://maps.gsi.go.jp/xyz/topo/{z}/{x}/{y}.png', {maxZoom:16, opacity:1.0});
     meijiTile.addTo(map);
     if (map.getZoom() > 16) map.setZoom(16);
     meijiVisible = true;
     btn.style.opacity = '0.5';
-    showMsg('🗺 明治時代の地図に切替', 2500);
+    showMsg('🗺 昭和の地形図に切替', 2500);
   }
 }
 
