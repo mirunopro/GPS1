@@ -75,12 +75,10 @@ border-top:1px solid #333;
   <div id="stats">
     <div class="sb"><div class="sv" id="dVal">0.00</div><div class="sl">距離 km</div></div>
     <div class="sb"><div class="sv" id="tVal">00:00</div><div class="sl">時間</div></div>
-    <div class="sb"><div class="sv" id="pVal">--'--"</div><div class="sl">ペース/km</div></div>
   </div>
   <div id="stats2">
     <div class="sb"><div class="sv" id="altVal">--</div><div class="sl">🏔 標高 m</div></div>
     <div class="sb"><div class="sv" id="spdVal">--</div><div class="sl">💨 速度 km/h</div></div>
-    <div class="sb"><div class="sv" id="hdgVal">--</div><div class="sl">🧭 方位</div></div>
   </div>
   <div id="btns">
     <button id="btnStart" onclick="startWalk()">▶ スタート</button>
@@ -121,7 +119,7 @@ function toggleMeiji() {
     meijiVisible = false;
     btn.style.opacity = '1';
     if (!ortVisible) modernTile.addTo(map);
-    showMsg('明治地図を非表示', 2000);
+    showMsg('昭和初期の写真を非表示', 2000);
   } else {
     if (!ortVisible) map.removeLayer(modernTile);
     if (ortVisible) { map.removeLayer(ortTileLayer); ortVisible = false; document.getElementById('btnOrt').style.opacity='1'; }
@@ -186,13 +184,6 @@ var timerInv = null;
 var totalKm = 0;
 var path = [];
 
-// 方位を日本語に変換
-function heading2str(h) {
-  if (h === null) return '--';
-  var dirs = ['北','北東','東','南東','南','南西','西','北西'];
-  return dirs[Math.round(h/45) % 8];
-}
-
 function showMsg(txt, ms) {
   var el = document.getElementById('msgBox');
   el.textContent = txt;
@@ -239,10 +230,8 @@ function clearAll() {
   if(startMarker){map.removeLayer(startMarker);startMarker=null;}
   document.getElementById('dVal').textContent='0.00';
   document.getElementById('tVal').textContent='00:00';
-  document.getElementById('pVal').textContent="--'--\"";
   document.getElementById('altVal').textContent='--';
   document.getElementById('spdVal').textContent='--';
-  document.getElementById('hdgVal').textContent='--';
   document.getElementById('spdBig').style.display='none';
   document.getElementById('spdBigVal').textContent='0.0';
   try { localStorage.removeItem('sanpo_path'); localStorage.removeItem('sanpo_km'); localStorage.removeItem('sanpo_start'); localStorage.removeItem('sanpo_walking'); } catch(e){}
@@ -260,18 +249,12 @@ function onGPS(pos) {
     document.getElementById('altVal').textContent = Math.round(alt);
   }
 
-  // 速度（大きく表示 + 小さいボックスも更新）
+  // 速度
   var spd = pos.coords.speed;
   if (spd !== null && spd !== undefined && spd >= 0) {
     var spdKmh = (spd * 3.6).toFixed(1);
     document.getElementById('spdVal').textContent = spdKmh;
     document.getElementById('spdBigVal').textContent = spdKmh;
-  }
-
-  // 方位
-  var hdg = pos.coords.heading;
-  if (hdg !== null && hdg !== undefined && !isNaN(hdg)) {
-    document.getElementById('hdgVal').textContent = heading2str(hdg);
   }
 
   // マーカー更新
@@ -314,11 +297,6 @@ function tickTimer() {
   var s=Math.floor((Date.now()-startTime)/1000);
   var m=Math.floor(s/60), ss=s%60;
   document.getElementById('tVal').textContent=(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
-  if (totalKm>0.05) {
-    var pps=s/totalKm;
-    var pm=Math.floor(pps/60), ps=Math.floor(pps%60);
-    document.getElementById('pVal').textContent=pm+"'"+(ps<10?'0':'')+ps+'"';
-  }
 }
 
 function haversine(lat1,lng1,lat2,lng2) {
