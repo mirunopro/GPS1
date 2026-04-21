@@ -31,13 +31,15 @@ background:#1a1a1a;
 padding:12px 16px 20px;
 border-top:1px solid #333;
 }
-#stats{display:flex;gap:8px;margin-bottom:12px;}
-.sb{flex:1;background:#222;border-radius:12px;padding:10px;text-align:center;border:1px solid #333;}
-.sv{font-size:22px;font-weight:700;color:#4ade80;}
-.sl{font-size:10px;color:#666;margin-top:2px;}
+#stats{display:flex;gap:8px;margin-bottom:8px;}
+#stats2{display:flex;gap:8px;margin-bottom:12px;}
+.sb{flex:1;background:#222;border-radius:12px;padding:8px 4px;text-align:center;border:1px solid #333;}
+.sv{font-size:18px;font-weight:700;color:#4ade80;}
+.sl{font-size:9px;color:#666;margin-top:2px;}
 #btns{display:flex;gap:10px;}
 #btnStart{flex:1;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-size:16px;font-weight:700;-webkit-appearance:none;cursor:pointer;}
 #btnStop{flex:1;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;font-size:16px;font-weight:700;-webkit-appearance:none;cursor:pointer;display:none;}
+#btnSpot{width:54px;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;font-size:22px;-webkit-appearance:none;cursor:pointer;}
 #btnClear{width:54px;height:54px;border-radius:14px;border:none;background:#2a2a2a;color:#888;font-size:18px;-webkit-appearance:none;cursor:pointer;}
 </style>
 
@@ -58,9 +60,16 @@ border-top:1px solid #333;
     <div class="sb"><div class="sv" id="tVal">00:00</div><div class="sl">時間</div></div>
     <div class="sb"><div class="sv" id="pVal">--'--"</div><div class="sl">ペース/km</div></div>
   </div>
+  <div id="stats2">
+    <div class="sb"><div class="sv" id="altVal">--</div><div class="sl">🏔 標高 m</div></div>
+    <div class="sb"><div class="sv" id="gainVal">0</div><div class="sl">📈 獲得標高 m</div></div>
+    <div class="sb"><div class="sv" id="spdVal">--</div><div class="sl">💨 速度 km/h</div></div>
+    <div class="sb"><div class="sv" id="hdgVal">--</div><div class="sl">🧭 方位</div></div>
+  </div>
   <div id="btns">
     <button id="btnStart" onclick="startWalk()">▶ スタート</button>
     <button id="btnStop"  onclick="stopWalk()">■ ストップ</button>
+    <button id="btnSpot"  onclick="loadSpots()">⛩️</button>
     <button id="btnClear" onclick="clearAll()">🗑</button>
   </div>
 </div>
@@ -113,6 +122,15 @@ var startTime = null;
 var timerInv = null;
 var totalKm = 0;
 var path = [];
+var totalGain = 0;  // 獲得標高
+var lastAlt = null; // 前回の標高
+
+// 方位を日本語に変換
+function heading2str(h) {
+  if (h === null) return '--';
+  var dirs = ['北','北東','東','南東','南','南西','西','北西'];
+  return dirs[Math.round(h/45) % 8];
+}
 
 function showMsg(txt, ms) {
   var el = document.getElementById('msgBox');
@@ -149,12 +167,16 @@ function stopWalk() {
 }
 
 function clearAll() {
-  path=[]; totalKm=0;
+  path=[]; totalKm=0; totalGain=0; lastAlt=null;
   routeLine.setLatLngs([]);
   if(startMarker){map.removeLayer(startMarker);startMarker=null;}
   document.getElementById('dVal').textContent='0.00';
   document.getElementById('tVal').textContent='00:00';
   document.getElementById('pVal').textContent="--'--\"";
+  document.getElementById('altVal').textContent='--';
+  document.getElementById('gainVal').textContent='0';
+  document.getElementById('spdVal').textContent='--';
+  document.getElementById('hdgVal').textContent='--';
   showMsg('クリアしました');
 }
 
@@ -162,6 +184,33 @@ function onGPS(pos) {
   var lat=pos.coords.latitude, lng=pos.coords.longitude;
   var acc=Math.round(pos.coords.accuracy);
   document.getElementById('gpsT').textContent='±'+acc+'m';
+
+  // 標高
+  var alt = pos.coords.altitude;
+  if (alt !== null && alt !== undefined) {
+    document.getElementById('altVal').textContent = Math.round(alt);
+    // 獲得標高（上りのみ累計）
+    if (walking && lastAlt !== null) {
+      var diff = alt - lastAlt;
+      if (diff > 0.5) { // 0.5m以上の上りのみカウント
+        totalGain += diff;
+        document.getElementById('gainVal').textContent = Math.round(totalGain);
+      }
+    }
+    lastAlt = alt;
+  }
+
+  // 速度
+  var spd = pos.coords.speed;
+  if (spd !== null && spd !== undefined && spd >= 0) {
+    document.getElementById('spdVal').textContent = (spd * 3.6).toFixed(1);
+  }
+
+  // 方位
+  var hdg = pos.coords.heading;
+  if (hdg !== null && hdg !== undefined && !isNaN(hdg)) {
+    document.getElementById('hdgVal').textContent = heading2str(hdg);
+  }
 
   // マーカー更新
   if (!myMarker) {
@@ -209,6 +258,119 @@ function haversine(lat1,lng1,lat2,lng2) {
   var dLng=(lng2-lng1)*Math.PI/180;
   var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// ===== スピリチュアルスポット =====
+var spotMarkers = [];
+var spotsVisible = false;
+
+var spotTypes = {
+  'amenity=place_of_worship': {emoji:'⛩️', label:'神社・寺'},
+  'historic=ruins':            {emoji:'🗿', label:'遺跡'},
+  'historic=monument':         {emoji:'🏛️', label:'史跡'},
+  'natural=peak':              {emoji:'⛰️', label:'山頂'},
+  'tourism=attraction':        {emoji:'✨', label:'名所'},
+};
+
+function loadSpots() {
+  var center = map.getCenter();
+  var lat = center.lat, lng = center.lng;
+  var r = 1000; // 半径1km
+
+  if (spotsVisible) {
+    // 非表示にする
+    for (var i=0; i<spotMarkers.length; i++) map.removeLayer(spotMarkers[i]);
+    spotMarkers = [];
+    spotsVisible = false;
+    document.getElementById('btnSpot').style.opacity = '1';
+    showMsg('スポットを非表示にしました');
+    return;
+  }
+
+  showMsg('⛩️ スポットを検索中...', 4000);
+
+  // Overpass API でOpenStreetMapのデータ取得
+  var query = '[out:json][timeout:10];('
+    + 'node["amenity"="place_of_worship"](around:'+r+','+lat+','+lng+');'
+    + 'node["historic"="ruins"](around:'+r+','+lat+','+lng+');'
+    + 'node["historic"="monument"](around:'+r+','+lat+','+lng+');'
+    + 'node["historic"="wayside_shrine"](around:'+r+','+lat+','+lng+');'
+    + 'node["natural"="peak"](around:'+r+','+lat+','+lng+');'
+    + 'node["tourism"="attraction"](around:'+r+','+lat+','+lng+');'
+    + ');out body;';
+
+  var url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
+
+  fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (!data.elements || data.elements.length === 0) {
+        showMsg('近くにスポットが見つかりませんでした', 3000);
+        return;
+      }
+
+      for (var i=0; i<data.elements.length; i++) {
+        var el = data.elements[i];
+        if (!el.lat || !el.lon) continue;
+
+        var name = el.tags.name || el.tags['name:ja'] || '名称不明';
+        var emoji = getSpotEmoji(el.tags);
+        var religion = el.tags.religion || '';
+
+        // 神社・寺を区別
+        if (el.tags.amenity === 'place_of_worship') {
+          if (religion === 'shinto') emoji = '⛩️';
+          else if (religion === 'buddhist') emoji = '🛕';
+          else emoji = '🙏';
+        }
+
+        var icon = L.divIcon({
+          html: '<div style="font-size:24px;text-shadow:0 0 6px rgba(255,255,255,0.8),0 2px 4px rgba(0,0,0,0.5);">'+emoji+'</div>',
+          iconSize: [30,30],
+          iconAnchor: [15,15],
+          className: ''
+        });
+
+        var marker = L.marker([el.lat, el.lon], {icon:icon}).addTo(map);
+        marker.bindPopup(
+          '<div style="font-size:14px;font-weight:bold;color:#333;">'+emoji+' '+name+'</div>'
+          + '<div style="font-size:11px;color:#666;margin-top:4px;">'+getSpotTypeLabel(el.tags)+'</div>',
+          {maxWidth: 200}
+        );
+        spotMarkers.push(marker);
+      }
+
+      spotsVisible = true;
+      document.getElementById('btnSpot').style.opacity = '0.5';
+      showMsg('⛩️ '+spotMarkers.length+'件のスポットを表示', 3000);
+    })
+    .catch(function(e) {
+      showMsg('スポット取得エラー。通信を確認してください', 3000);
+    });
+}
+
+function getSpotEmoji(tags) {
+  if (tags.amenity === 'place_of_worship') return '🙏';
+  if (tags.historic === 'ruins') return '🗿';
+  if (tags.historic === 'monument') return '🏛️';
+  if (tags.historic === 'wayside_shrine') return '⛩️';
+  if (tags.natural === 'peak') return '⛰️';
+  if (tags.tourism === 'attraction') return '✨';
+  return '📍';
+}
+
+function getSpotTypeLabel(tags) {
+  if (tags.amenity === 'place_of_worship') {
+    if (tags.religion === 'shinto') return '神社';
+    if (tags.religion === 'buddhist') return 'お寺';
+    return '礼拝所';
+  }
+  if (tags.historic === 'ruins') return '遺跡';
+  if (tags.historic === 'monument') return '史跡・記念碑';
+  if (tags.historic === 'wayside_shrine') return '祠';
+  if (tags.natural === 'peak') return '山頂';
+  if (tags.tourism === 'attraction') return '名所・観光地';
+  return 'スポット';
 }
 
 // 起動時GPS取得
