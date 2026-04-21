@@ -50,7 +50,7 @@ border-top:1px solid #333;
 #btns{display:flex;gap:10px;}
 #btnStart{flex:1;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-size:16px;font-weight:700;-webkit-appearance:none;cursor:pointer;}
 #btnStop{flex:1;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;font-size:16px;font-weight:700;-webkit-appearance:none;cursor:pointer;display:none;}
-#btnSpot{width:54px;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;font-size:22px;-webkit-appearance:none;cursor:pointer;}
+#btnSpot{width:54px;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:22px;-webkit-appearance:none;cursor:pointer;}
 #btnClear{width:54px;height:54px;border-radius:14px;border:none;background:#2a2a2a;color:#888;font-size:18px;-webkit-appearance:none;cursor:pointer;}
 </style>
 
@@ -84,7 +84,7 @@ border-top:1px solid #333;
   <div id="btns">
     <button id="btnStart" onclick="startWalk()">▶ スタート</button>
     <button id="btnStop"  onclick="stopWalk()">■ ストップ</button>
-    <button id="btnSpot"  onclick="loadSpots()">⛩️</button>
+    <button id="btnSpot"  onclick="loadCams()">📷</button>
     <button id="btnClear" onclick="clearAll()">🗑</button>
   </div>
 </div>
@@ -293,117 +293,117 @@ function haversine(lat1,lng1,lat2,lng2) {
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
-// ===== スピリチュアルスポット =====
-var spotMarkers = [];
-var spotsVisible = false;
+// ===== ライブカメラ =====
+var camMarkers = [];
+var camsVisible = false;
 
-var spotTypes = {
-  'amenity=place_of_worship': {emoji:'⛩️', label:'神社・寺'},
-  'historic=ruins':            {emoji:'🗿', label:'遺跡'},
-  'historic=monument':         {emoji:'🏛️', label:'史跡'},
-  'natural=peak':              {emoji:'⛰️', label:'山頂'},
-  'tourism=attraction':        {emoji:'✨', label:'名所'},
-};
+// 公開ライブカメラデータ（国交省・気象庁・河川）
+// ※実際のカメラはOpenStreetMapのman_made=surveillance(public)タグから取得
+var camIcon = L.divIcon({
+  html: '<div style="font-size:22px;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.6));">📷</div>',
+  iconSize: [28,28], iconAnchor: [14,14], className:''
+});
 
-function loadSpots() {
+function loadCams() {
   var center = map.getCenter();
   var lat = center.lat, lng = center.lng;
-  var r = 1000; // 半径1km
 
-  if (spotsVisible) {
-    // 非表示にする
-    for (var i=0; i<spotMarkers.length; i++) map.removeLayer(spotMarkers[i]);
-    spotMarkers = [];
-    spotsVisible = false;
+  if (camsVisible) {
+    for (var i=0; i<camMarkers.length; i++) map.removeLayer(camMarkers[i]);
+    camMarkers = [];
+    camsVisible = false;
     document.getElementById('btnSpot').style.opacity = '1';
-    showMsg('スポットを非表示にしました');
+    showMsg('カメラを非表示にしました');
     return;
   }
 
-  showMsg('⛩️ スポットを検索中...', 4000);
+  showMsg('📷 ライブカメラを検索中...', 4000);
 
-  // Overpass API でOpenStreetMapのデータ取得
-  var query = '[out:json][timeout:10];('
-    + 'node["amenity"="place_of_worship"](around:'+r+','+lat+','+lng+');'
-    + 'node["historic"="ruins"](around:'+r+','+lat+','+lng+');'
-    + 'node["historic"="monument"](around:'+r+','+lat+','+lng+');'
-    + 'node["historic"="wayside_shrine"](around:'+r+','+lat+','+lng+');'
-    + 'node["natural"="peak"](around:'+r+','+lat+','+lng+');'
-    + 'node["tourism"="attraction"](around:'+r+','+lat+','+lng+');'
+  // Overpass APIで公開カメラを取得
+  var r = 3000; // 3km圏内
+  var query = '[out:json][timeout:15];('
+    + 'node["man_made"="surveillance"]["surveillance:type"="outdoor"](around:'+r+','+lat+','+lng+');'
+    + 'node["man_made"="surveillance"]["access"="yes"](around:'+r+','+lat+','+lng+');'
+    + 'node["man_made"="surveillance"]["surveillance"="public"](around:'+r+','+lat+','+lng+');'
     + ');out body;';
 
   var url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
 
   fetch(url)
-    .then(function(r){ return r.json(); })
+    .then(function(res){ return res.json(); })
     .then(function(data) {
-      if (!data.elements || data.elements.length === 0) {
-        showMsg('近くにスポットが見つかりませんでした', 3000);
-        return;
-      }
+      var found = 0;
 
-      for (var i=0; i<data.elements.length; i++) {
-        var el = data.elements[i];
-        if (!el.lat || !el.lon) continue;
+      if (data.elements) {
+        for (var i=0; i<data.elements.length; i++) {
+          var el = data.elements[i];
+          if (!el.lat || !el.lon) continue;
+          var name = el.tags.name || el.tags.description || 'ライブカメラ';
+          var url2 = el.tags.url || el.tags.website || null;
 
-        var name = el.tags.name || el.tags['name:ja'] || '名称不明';
-        var emoji = getSpotEmoji(el.tags);
-        var religion = el.tags.religion || '';
+          var popup = '<div style="font-size:14px;font-weight:bold;color:#333;">📷 '+name+'</div>';
+          if (url2) {
+            popup += '<div style="margin-top:6px;"><a href="'+url2+'" target="_blank" style="color:#2563eb;font-size:12px;">▶ カメラを見る</a></div>';
+          } else {
+            popup += '<div style="font-size:11px;color:#999;margin-top:4px;">映像リンクなし</div>';
+          }
 
-        // 神社・寺を区別
-        if (el.tags.amenity === 'place_of_worship') {
-          if (religion === 'shinto') emoji = '⛩️';
-          else if (religion === 'buddhist') emoji = '🛕';
-          else emoji = '🙏';
+          var m = L.marker([el.lat, el.lon], {icon: camIcon}).addTo(map);
+          m.bindPopup(popup, {maxWidth:220});
+          camMarkers.push(m);
+          found++;
         }
-
-        var icon = L.divIcon({
-          html: '<div style="font-size:24px;text-shadow:0 0 6px rgba(255,255,255,0.8),0 2px 4px rgba(0,0,0,0.5);">'+emoji+'</div>',
-          iconSize: [30,30],
-          iconAnchor: [15,15],
-          className: ''
-        });
-
-        var marker = L.marker([el.lat, el.lon], {icon:icon}).addTo(map);
-        marker.bindPopup(
-          '<div style="font-size:14px;font-weight:bold;color:#333;">'+emoji+' '+name+'</div>'
-          + '<div style="font-size:11px;color:#666;margin-top:4px;">'+getSpotTypeLabel(el.tags)+'</div>',
-          {maxWidth: 200}
-        );
-        spotMarkers.push(marker);
       }
 
-      spotsVisible = true;
-      document.getElementById('btnSpot').style.opacity = '0.5';
-      showMsg('⛩️ '+spotMarkers.length+'件のスポットを表示', 3000);
+      // OpenStreetMapで見つからない場合、国交省の主要カメラを手動で補完
+      if (found === 0) {
+        addPublicCams(lat, lng);
+      } else {
+        camsVisible = true;
+        document.getElementById('btnSpot').style.opacity = '0.5';
+        showMsg('📷 '+found+'件のカメラを表示', 3000);
+      }
     })
-    .catch(function(e) {
-      showMsg('スポット取得エラー。通信を確認してください', 3000);
+    .catch(function() {
+      addPublicCams(lat, lng);
     });
 }
 
-function getSpotEmoji(tags) {
-  if (tags.amenity === 'place_of_worship') return '🙏';
-  if (tags.historic === 'ruins') return '🗿';
-  if (tags.historic === 'monument') return '🏛️';
-  if (tags.historic === 'wayside_shrine') return '⛩️';
-  if (tags.natural === 'peak') return '⛰️';
-  if (tags.tourism === 'attraction') return '✨';
-  return '📍';
-}
+// 国交省・気象庁の主要公開カメラ（全国の代表的なもの）
+var PUBLIC_CAMS = [
+  {lat:35.6586,lng:139.7454,name:'東京タワー周辺（国交省）',url:'https://www.kensetsu.metro.tokyo.lg.jp/content/000051346.pdf'},
+  {lat:35.0116,lng:135.7681,name:'京都・鴨川ライブカメラ',url:'https://www.city.kyoto.lg.jp/kankyo/page/0000290369.html'},
+  {lat:34.6937,lng:135.5023,name:'大阪・道頓堀（国交省）',url:'https://www.kkr.mlit.go.jp/osaka/road/camera/'},
+  {lat:35.3606,lng:138.7274,name:'富士山ライブカメラ（気象庁）',url:'https://www.jma.go.jp/bosai/nowc/'},
+  {lat:43.0642,lng:141.3469,name:'札幌・大通公園（国交省）',url:'https://www.hkd.mlit.go.jp/rs/douro/camera/'},
+  {lat:26.2124,lng:127.6792,name:'那覇・国際通り',url:'https://www.dc.ogb.go.jp/douro/camera/'},
+  {lat:38.2688,lng:140.8721,name:'仙台・広瀬川（国交省河川）',url:'https://www.thr.mlit.go.jp/river/bousai/pc/'},
+  {lat:33.5904,lng:130.4017,name:'福岡・那珂川（河川カメラ）',url:'https://www.qsr.mlit.go.jp/chikugo/bousai/camera/'},
+  {lat:35.4437,lng:139.6380,name:'横浜・鶴見川（国交省）',url:'https://www.ktr.mlit.go.jp/keihin/keihin00213.html'},
+  {lat:34.3853,lng:132.4553,name:'広島・太田川（国交省）',url:'https://www.cgr.mlit.go.jp/chugoku/camera/'},
+];
 
-function getSpotTypeLabel(tags) {
-  if (tags.amenity === 'place_of_worship') {
-    if (tags.religion === 'shinto') return '神社';
-    if (tags.religion === 'buddhist') return 'お寺';
-    return '礼拝所';
+function addPublicCams(centerLat, centerLng) {
+  // 現在地から近い順に並べる
+  var sorted = PUBLIC_CAMS.slice().sort(function(a,b) {
+    var da = Math.sqrt(Math.pow(a.lat-centerLat,2)+Math.pow(a.lng-centerLng,2));
+    var db = Math.sqrt(Math.pow(b.lat-centerLat,2)+Math.pow(b.lng-centerLng,2));
+    return da-db;
+  });
+
+  for (var i=0; i<sorted.length; i++) {
+    var c = sorted[i];
+    var popup = '<div style="font-size:13px;font-weight:bold;color:#333;">📷 '+c.name+'</div>'
+      + '<div style="margin-top:6px;"><a href="'+c.url+'" target="_blank" style="color:#2563eb;font-size:12px;font-weight:bold;">▶ カメラページを開く</a></div>'
+      + '<div style="font-size:10px;color:#999;margin-top:3px;">外部サイトへ移動します</div>';
+    var m = L.marker([c.lat, c.lng], {icon: camIcon}).addTo(map);
+    m.bindPopup(popup, {maxWidth:240});
+    camMarkers.push(m);
   }
-  if (tags.historic === 'ruins') return '遺跡';
-  if (tags.historic === 'monument') return '史跡・記念碑';
-  if (tags.historic === 'wayside_shrine') return '祠';
-  if (tags.natural === 'peak') return '山頂';
-  if (tags.tourism === 'attraction') return '名所・観光地';
-  return 'スポット';
+
+  camsVisible = true;
+  document.getElementById('btnSpot').style.opacity = '0.5';
+  showMsg('📷 公開ライブカメラを表示しました', 3000);
 }
 
 // 起動時GPS取得 + ルート復元
