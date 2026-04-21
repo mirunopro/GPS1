@@ -133,9 +133,9 @@ var taishoVisible = false;
 var showaVisible = false;
 var nightVisible = false;
 
-// 夜間光マップ（NASA GIBS - VIIRS Black Marble）
-var nightTile = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_Black_Marble/default/2023-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg', {
-  maxZoom:22, maxNativeZoom:8, opacity:1.0
+// 夜間光マップ（国土地理院）
+var nightTile = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/lum4bl_capital2005/{z}/{x}/{y}.png', {
+  maxZoom:22, maxNativeZoom:14, opacity:1.0
 });
 
 var meijiVisible = false;
@@ -239,7 +239,7 @@ function toggleNight() {
     nightTile.addTo(map);
     nightVisible = true;
     btn.style.opacity = '0.5';
-    showMsg('🌙 夜間光マップ（NASA）に切替', 2500);
+    showMsg('🌙 夜間光マップ（国土地理院）に切替', 2500);
   }
 }
 
