@@ -102,16 +102,9 @@ var map = L.map('mapDiv', {
 
 // タイルレイヤー（現代・古地図切替）
 var modernTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19, crossOrigin: true
+  maxZoom: 19
 });
-var oldTile = L.tileLayer('https://maps.jst.go.jp/chizu1/tile/{z}/{x}/{y}.png', {
-  maxZoom: 18, crossOrigin: true,
-  errorTileUrl: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-});
-// 明治時代の地図（国土地理院）
-var meijTile = L.tileLayer('https://nlftp.mlit.go.jp/ksj/gml/imgdata/meiji/{z}/{x}/{y}.png', {
-  maxZoom: 17, crossOrigin: true
-});
+var oldTile = null;
 
 var currentTileMode = 'modern'; // modern / old
 modernTile.addTo(map);
@@ -120,12 +113,12 @@ function toggleOldMap() {
   var btn = document.getElementById('btnOldMap');
   if (currentTileMode === 'modern') {
     map.removeLayer(modernTile);
-    // 国土地理院の明治地図タイル
     oldTile = L.tileLayer(
       'https://maps.gsi.go.jp/xyz/meiji/{z}/{x}/{y}.png',
-      {maxZoom:17, crossOrigin:true}
+      {maxZoom:16, crossOrigin:true, opacity:1.0}
     );
     oldTile.addTo(map);
+    if (map.getZoom() > 16) map.setZoom(16);
     currentTileMode = 'old';
     btn.style.background = 'linear-gradient(135deg,#dc2626,#b91c1c)';
     showMsg('🗺 明治時代の地図に切替', 2500);
