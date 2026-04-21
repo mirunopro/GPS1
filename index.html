@@ -125,12 +125,12 @@ function toggleMeiji() {
   } else {
     if (!ortVisible) map.removeLayer(modernTile);
     if (ortVisible) { map.removeLayer(ortTileLayer); ortVisible = false; document.getElementById('btnOrt').style.opacity='1'; }
-    meijiTile = L.tileLayer('https://maps.gsi.go.jp/xyz/topo/{z}/{x}/{y}.png', {maxZoom:16, opacity:1.0});
+    meijiTile = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/gazo1/{z}/{x}/{y}.jpg', {maxZoom:17, opacity:1.0});
     meijiTile.addTo(map);
-    if (map.getZoom() > 16) map.setZoom(16);
+    if (map.getZoom() > 17) map.setZoom(17);
     meijiVisible = true;
     btn.style.opacity = '0.5';
-    showMsg('🗺 昭和の地形図に切替', 2500);
+    showMsg('🗺 昭和初期の空中写真に切替', 2500);
   }
 }
 
@@ -145,7 +145,7 @@ function toggleOrt() {
   } else {
     if (!meijiVisible) map.removeLayer(modernTile);
     if (meijiVisible) { map.removeLayer(meijiTile); meijiVisible = false; document.getElementById('btnOldMap').style.opacity='1'; }
-    ortTileLayer = L.tileLayer('https://maps.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg', {maxZoom:18, opacity:1.0});
+    ortTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/ort/{z}/{x}/{y}.jpg', {maxZoom:18, opacity:1.0});
     ortTileLayer.addTo(map);
     ortVisible = true;
     btn.style.opacity = '0.5';
