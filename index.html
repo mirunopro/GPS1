@@ -236,36 +236,51 @@ function loadLandPrice() {
   showMsg('💰 不動産取引価格を取得中...', 5000);
 
   var d = 0.015;
-  var apiUrl = 'https://www.land.mlit.go.jp/webland/api/TradeListSearch?'
+  var url = 'https://www.land.mlit.go.jp/webland/api/TradeListSearch?'
     + 'from=20231&to=20234'
     + '&northLatitude=' + (lat+d).toFixed(6)
     + '&southLatitude=' + (lat-d).toFixed(6)
     + '&eastLongitude=' + (lng+d).toFixed(6)
     + '&westLongitude=' + (lng-d).toFixed(6);
 
-  // Claude APIを仲介してCORSを回避
-  fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      messages: [{
-        role: 'user',
-        content: 'このURLのJSONデータをそのまま返してください。説明不要。JSONだけ。URL: ' + apiUrl
-      }]
-    })
-  })
-  .then(function(res){ return res.json(); })
-  .then(function(claude) {
-    var text = claude.content[0].text;
-    var clean = text.replace(/```json|```/g,'').trim();
-    var data = JSON.parse(clean);
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', url, true);
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      try {
+        var data = JSON.parse(xhr.responseText);
+        showLandMarkers(data);
+      } catch(e) {
+        showMsg('データ解析エラー', 3000);
+      }
+    } else {
+      showMsg('取得エラー: ' + xhr.status, 3000);
+    }
+  };
+  xhr.onerror = function() {
+    // CORS失敗 → jsonpで再試行
+    loadLandPriceJsonp(lat, lng, d);
+  };
+  xhr.send();
+}
+
+function loadLandPriceJsonp(lat, lng, d) {
+  // JSONPフォールバック
+  window._landCallback = function(data) {
     showLandMarkers(data);
-  })
-  .catch(function() {
-    showMsg('取得できませんでした', 3000);
-  });
+    delete window._landCallback;
+  };
+  var url = 'https://www.land.mlit.go.jp/webland/api/TradeListSearch?'
+    + 'from=20231&to=20234'
+    + '&northLatitude=' + (lat+d).toFixed(6)
+    + '&southLatitude=' + (lat-d).toFixed(6)
+    + '&eastLongitude=' + (lng+d).toFixed(6)
+    + '&westLongitude=' + (lng-d).toFixed(6)
+    + '&callback=_landCallback';
+  var s = document.createElement('script');
+  s.src = url;
+  s.onerror = function() { showMsg('このAPIはブラウザから直接使えません', 4000); };
+  document.head.appendChild(s);
 }
 
 function showLandMarkers(data) {
