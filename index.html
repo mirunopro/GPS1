@@ -24,6 +24,17 @@ body{display:flex;flex-direction:column;background:#111;color:#fff;font-family:'
 
 #msgBox{position:absolute;top:52px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);border-radius:20px;padding:7px 18px;font-size:13px;white-space:nowrap;pointer-events:none;z-index:1000;opacity:0;transition:opacity 0.3s;max-width:90%;text-align:center;}
 
+/* リアルタイム速度表示 */
+#spdBig{
+position:absolute;bottom:12px;left:12px;
+background:rgba(0,0,0,0.75);border-radius:16px;
+padding:8px 16px;z-index:1000;pointer-events:none;
+border:1px solid rgba(74,222,128,0.4);
+display:none;
+}
+#spdBigVal{font-size:32px;font-weight:900;color:#4ade80;line-height:1;}
+#spdBigLbl{font-size:10px;color:#888;text-align:center;margin-top:2px;}
+
 /* 下部UI - 固定高さ */
 #bottomUI{
 flex-shrink:0;
@@ -52,6 +63,10 @@ border-top:1px solid #333;
     <div class="badge" id="gpsB"><div class="dot" id="gpsDot"></div><span id="gpsT">GPS待機</span></div>
   </div>
   <div id="msgBox"></div>
+  <div id="spdBig">
+    <div id="spdBigVal">0.0</div>
+    <div id="spdBigLbl">km/h</div>
+  </div>
 </div>
 
 <div id="bottomUI">
@@ -142,13 +157,16 @@ function showMsg(txt, ms) {
 
 function startWalk() {
   if (!navigator.geolocation) { showMsg('GPSが使えません',3000); return; }
-  walking=true; path=[]; totalKm=0; startTime=Date.now();
+  walking=true; path=[]; totalKm=0; totalGain=0; lastAlt=null; startTime=Date.now();
   routeLine.setLatLngs([]);
   if (startMarker) { map.removeLayer(startMarker); startMarker=null; }
   document.getElementById('btnStart').style.display='none';
   document.getElementById('btnStop').style.display='flex';
   document.getElementById('gpsDot').className='dot on';
   document.getElementById('gpsT').textContent='記録中';
+  document.getElementById('spdBig').style.display='block';
+  // localStorage初期化
+  try { localStorage.setItem('sanpo_path', '[]'); localStorage.setItem('sanpo_km','0'); localStorage.setItem('sanpo_start', Date.now()); } catch(e){}
   showMsg('🚶 スタート！');
   timerInv = setInterval(tickTimer, 1000);
   watchId = navigator.geolocation.watchPosition(onGPS, onErr,
@@ -163,6 +181,9 @@ function stopWalk() {
   document.getElementById('btnStop').style.display='none';
   document.getElementById('gpsDot').className='dot';
   document.getElementById('gpsT').textContent='停止';
+  document.getElementById('spdBig').style.display='none';
+  // 完了データをlocalStorageに保存
+  try { localStorage.setItem('sanpo_walking','0'); } catch(e){}
   showMsg('🏁 '+totalKm.toFixed(2)+'km 完了！', 4000);
 }
 
@@ -177,6 +198,9 @@ function clearAll() {
   document.getElementById('gainVal').textContent='0';
   document.getElementById('spdVal').textContent='--';
   document.getElementById('hdgVal').textContent='--';
+  document.getElementById('spdBig').style.display='none';
+  document.getElementById('spdBigVal').textContent='0.0';
+  try { localStorage.removeItem('sanpo_path'); localStorage.removeItem('sanpo_km'); localStorage.removeItem('sanpo_start'); localStorage.removeItem('sanpo_walking'); } catch(e){}
   showMsg('クリアしました');
 }
 
@@ -200,10 +224,12 @@ function onGPS(pos) {
     lastAlt = alt;
   }
 
-  // 速度
+  // 速度（大きく表示 + 小さいボックスも更新）
   var spd = pos.coords.speed;
   if (spd !== null && spd !== undefined && spd >= 0) {
-    document.getElementById('spdVal').textContent = (spd * 3.6).toFixed(1);
+    var spdKmh = (spd * 3.6).toFixed(1);
+    document.getElementById('spdVal').textContent = spdKmh;
+    document.getElementById('spdBigVal').textContent = spdKmh;
   }
 
   // 方位
@@ -229,11 +255,18 @@ function onGPS(pos) {
         path.push([lat,lng]);
         routeLine.setLatLngs(path);
         document.getElementById('dVal').textContent=totalKm.toFixed(2);
+        // localStorageに保存（復元用）
+        try {
+          localStorage.setItem('sanpo_path', JSON.stringify(path));
+          localStorage.setItem('sanpo_km', totalKm.toFixed(3));
+          localStorage.setItem('sanpo_walking', '1');
+        } catch(e){}
       }
     } else {
       path.push([lat,lng]);
       routeLine.setLatLngs(path);
       startMarker = L.marker([lat,lng], {icon:startIcon}).addTo(map);
+      try { localStorage.setItem('sanpo_path', JSON.stringify(path)); } catch(e){}
     }
   }
 }
@@ -373,7 +406,7 @@ function getSpotTypeLabel(tags) {
   return 'スポット';
 }
 
-// 起動時GPS取得
+// 起動時GPS取得 + ルート復元
 if (navigator.geolocation) {
   navigator.geolocation.getCurrentPosition(function(pos) {
     map.setView([pos.coords.latitude, pos.coords.longitude], 17);
@@ -383,6 +416,42 @@ if (navigator.geolocation) {
     showMsg('現在地を取得できませんでした', 3000);
   }, {enableHighAccuracy:true, timeout:10000});
 }
+
+// localStorage からルート復元
+try {
+  var savedPath = localStorage.getItem('sanpo_path');
+  var savedKm   = localStorage.getItem('sanpo_km');
+  var savedWalking = localStorage.getItem('sanpo_walking');
+  var savedStart = localStorage.getItem('sanpo_start');
+
+  if (savedPath) {
+    var restored = JSON.parse(savedPath);
+    if (restored && restored.length > 1) {
+      path = restored;
+      totalKm = savedKm ? parseFloat(savedKm) : 0;
+      routeLine.setLatLngs(path);
+      // スタートマーカー復元
+      startMarker = L.marker([path[0][0], path[0][1]], {icon:startIcon}).addTo(map);
+      document.getElementById('dVal').textContent = totalKm.toFixed(2);
+      // 記録中だったら再開
+      if (savedWalking === '1') {
+        walking = true;
+        startTime = savedStart ? parseInt(savedStart) : Date.now();
+        document.getElementById('btnStart').style.display='none';
+        document.getElementById('btnStop').style.display='flex';
+        document.getElementById('gpsDot').className='dot on';
+        document.getElementById('gpsT').textContent='記録中';
+        document.getElementById('spdBig').style.display='block';
+        timerInv = setInterval(tickTimer, 1000);
+        watchId = navigator.geolocation.watchPosition(onGPS, onErr,
+          {enableHighAccuracy:true, timeout:15000, maximumAge:0});
+        showMsg('📍 記録を再開しました', 3000);
+      } else {
+        showMsg('📍 前回のルートを復元しました', 3000);
+      }
+    }
+  }
+} catch(e) {}
 </script>
 
 </body>
