@@ -51,6 +51,7 @@ border-top:1px solid #333;
 #btnStart{flex:1;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-size:16px;font-weight:700;-webkit-appearance:none;cursor:pointer;}
 #btnStop{flex:1;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;font-size:16px;font-weight:700;-webkit-appearance:none;cursor:pointer;display:none;}
 #btnSpot{width:54px;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:22px;-webkit-appearance:none;cursor:pointer;}
+#btnFamous{width:54px;height:54px;border-radius:14px;border:none;background:linear-gradient(135deg,#d97706,#b45309);color:#fff;font-size:22px;-webkit-appearance:none;cursor:pointer;}
 #btnClear{width:54px;height:54px;border-radius:14px;border:none;background:#2a2a2a;color:#888;font-size:18px;-webkit-appearance:none;cursor:pointer;}
 </style>
 
@@ -77,14 +78,13 @@ border-top:1px solid #333;
   </div>
   <div id="stats2">
     <div class="sb"><div class="sv" id="altVal">--</div><div class="sl">🏔 標高 m</div></div>
-    <div class="sb"><div class="sv" id="gainVal">0</div><div class="sl">📈 獲得標高 m</div></div>
     <div class="sb"><div class="sv" id="spdVal">--</div><div class="sl">💨 速度 km/h</div></div>
     <div class="sb"><div class="sv" id="hdgVal">--</div><div class="sl">🧭 方位</div></div>
   </div>
   <div id="btns">
     <button id="btnStart" onclick="startWalk()">▶ スタート</button>
     <button id="btnStop"  onclick="stopWalk()">■ ストップ</button>
-    <button id="btnSpot"  onclick="loadCams()">📷</button>
+    <button id="btnFamous" onclick="loadFamous()">⭐</button>
     <button id="btnClear" onclick="clearAll()">🗑</button>
   </div>
 </div>
@@ -137,8 +137,6 @@ var startTime = null;
 var timerInv = null;
 var totalKm = 0;
 var path = [];
-var totalGain = 0;  // 獲得標高
-var lastAlt = null; // 前回の標高
 
 // 方位を日本語に変換
 function heading2str(h) {
@@ -157,7 +155,7 @@ function showMsg(txt, ms) {
 
 function startWalk() {
   if (!navigator.geolocation) { showMsg('GPSが使えません',3000); return; }
-  walking=true; path=[]; totalKm=0; totalGain=0; lastAlt=null; startTime=Date.now();
+  walking=true; path=[]; totalKm=0; startTime=Date.now();
   routeLine.setLatLngs([]);
   if (startMarker) { map.removeLayer(startMarker); startMarker=null; }
   document.getElementById('btnStart').style.display='none';
@@ -188,14 +186,13 @@ function stopWalk() {
 }
 
 function clearAll() {
-  path=[]; totalKm=0; totalGain=0; lastAlt=null;
+  path=[]; totalKm=0;
   routeLine.setLatLngs([]);
   if(startMarker){map.removeLayer(startMarker);startMarker=null;}
   document.getElementById('dVal').textContent='0.00';
   document.getElementById('tVal').textContent='00:00';
   document.getElementById('pVal').textContent="--'--\"";
   document.getElementById('altVal').textContent='--';
-  document.getElementById('gainVal').textContent='0';
   document.getElementById('spdVal').textContent='--';
   document.getElementById('hdgVal').textContent='--';
   document.getElementById('spdBig').style.display='none';
@@ -213,15 +210,6 @@ function onGPS(pos) {
   var alt = pos.coords.altitude;
   if (alt !== null && alt !== undefined) {
     document.getElementById('altVal').textContent = Math.round(alt);
-    // 獲得標高（上りのみ累計）
-    if (walking && lastAlt !== null) {
-      var diff = alt - lastAlt;
-      if (diff > 0.5) { // 0.5m以上の上りのみカウント
-        totalGain += diff;
-        document.getElementById('gainVal').textContent = Math.round(totalGain);
-      }
-    }
-    lastAlt = alt;
   }
 
   // 速度（大きく表示 + 小さいボックスも更新）
@@ -293,81 +281,114 @@ function haversine(lat1,lng1,lat2,lng2) {
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
-// ===== ライブカメラ =====
-var camMarkers = [];
-var camsVisible = false;
+// ===== 有名人出身地マップ =====
+var famousMarkers = [];
+var famousVisible = false;
 
-// 公開ライブカメラデータ（国交省・気象庁・河川）
-// ※実際のカメラはOpenStreetMapのman_made=surveillance(public)タグから取得
-var camIcon = L.divIcon({
-  html: '<div style="background:#2563eb;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:22px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);">📷</div>',
-  iconSize: [40,40], iconAnchor: [20,20], className:''
-});
-
-function loadCams() {
-  if (camsVisible) {
-    for (var i=0; i<camMarkers.length; i++) map.removeLayer(camMarkers[i]);
-    camMarkers = [];
-    camsVisible = false;
-    document.getElementById('btnSpot').style.opacity = '1';
-    showMsg('カメラを非表示にしました');
+function loadFamous() {
+  if (famousVisible) {
+    for (var i=0; i<famousMarkers.length; i++) map.removeLayer(famousMarkers[i]);
+    famousMarkers = [];
+    famousVisible = false;
+    document.getElementById('btnFamous').style.opacity = '1';
+    showMsg('有名人マークを非表示にしました');
     return;
   }
-  // 必ず公開カメラを表示
+
   var center = map.getCenter();
-  addPublicCams(center.lat, center.lng);
+  var lat = center.lat, lng = center.lng;
+  showMsg('⭐ 有名人出身地を検索中...', 5000);
+
+  // WikiData SPARQL: 現在地周辺の出身者を取得
+  var sparql = `
+SELECT DISTINCT ?person ?personLabel ?birthPlaceLabel ?coord ?occupation ?occupationLabel WHERE {
+  ?person wdt:P19 ?birthPlace .
+  ?birthPlace wdt:P625 ?coord .
+  ?person wdt:P27 wd:Q17 .
+  SERVICE wikibase:around {
+    ?birthPlace wdt:P625 ?coord .
+    bd:serviceParam wikibase:center "Point(` + lng + ` ` + lat + `)"^^geo:wktLiteral .
+    bd:serviceParam wikibase:radius "30" .
+  }
+  OPTIONAL { ?person wdt:P106 ?occupation . }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "ja,en" . }
 }
+LIMIT 60
+`;
 
-// 国交省・気象庁の主要公開カメラ（全国）
-var PUBLIC_CAMS = [
-  {lat:35.6762,lng:139.6503,name:'首都高速ライブカメラ',url:'https://www.shutoko.jp/use/traffic-info/camera/'},
-  {lat:35.6586,lng:139.7454,name:'東京・日本橋付近（国交省）',url:'https://www.ktr.mlit.go.jp/road/camera/'},
-  {lat:35.4437,lng:139.6380,name:'横浜・鶴見川（国交省）',url:'https://www.ktr.mlit.go.jp/keihin/keihin00213.html'},
-  {lat:35.5494,lng:139.7798,name:'多摩川ライブカメラ（国交省）',url:'https://www.ktr.mlit.go.jp/keikyu/keikyu00217.html'},
-  {lat:35.8617,lng:139.6455,name:'荒川ライブカメラ（国交省）',url:'https://www.ktr.mlit.go.jp/arajo/arajo00198.html'},
-  {lat:35.0116,lng:135.7681,name:'京都・鴨川（国交省）',url:'https://www.kkr.mlit.go.jp/kyoto/camera/'},
-  {lat:34.6937,lng:135.5023,name:'大阪・淀川（国交省）',url:'https://www.kkr.mlit.go.jp/yodogawa/camera/'},
-  {lat:34.6895,lng:135.1957,name:'神戸・六甲山系河川（国交省）',url:'https://www.kkr.mlit.go.jp/kobe/camera/'},
-  {lat:35.1815,lng:136.9066,name:'名古屋・庄内川（国交省）',url:'https://www.cbr.mlit.go.jp/tokai/camera/'},
-  {lat:35.1167,lng:138.9300,name:'富士川ライブカメラ（国交省）',url:'https://www.cbr.mlit.go.jp/fujisabo/camera/'},
-  {lat:34.9756,lng:138.3830,name:'静岡・安倍川（国交省）',url:'https://www.cbr.mlit.go.jp/shizuoka/camera/'},
-  {lat:35.3606,lng:138.7274,name:'富士山ライブカメラ（気象庁）',url:'https://www.data.jma.go.jp/svd/volcam/data/volcam.html'},
-  {lat:31.5930,lng:130.6572,name:'桜島ライブカメラ（気象庁）',url:'https://www.data.jma.go.jp/svd/volcam/data/volcam.html'},
-  {lat:32.8840,lng:130.8592,name:'阿蘇山ライブカメラ（気象庁）',url:'https://www.data.jma.go.jp/svd/volcam/data/volcam.html'},
-  {lat:38.2688,lng:140.8721,name:'仙台・広瀬川（国交省）',url:'https://www.thr.mlit.go.jp/river/bousai/pc/'},
-  {lat:39.7036,lng:141.1527,name:'北上川ライブカメラ（国交省）',url:'https://www.thr.mlit.go.jp/kitakami/camera/'},
-  {lat:43.0642,lng:141.3469,name:'札幌・豊平川（国交省）',url:'https://www.hkd.mlit.go.jp/sp/river_bousai/camera/'},
-  {lat:33.5904,lng:130.4017,name:'福岡・那珂川（国交省）',url:'https://www.qsr.mlit.go.jp/chikugo/bousai/camera/'},
-  {lat:34.3853,lng:132.4553,name:'広島・太田川（国交省）',url:'https://www.cgr.mlit.go.jp/chugoku/camera/'},
-  {lat:33.8395,lng:132.7657,name:'高知・仁淀川（国交省）',url:'https://www.skr.mlit.go.jp/kochi/camera/'},
-  {lat:26.2124,lng:127.6792,name:'那覇・漫湖（国交省）',url:'https://www.dc.ogb.go.jp/douro/camera/'},
-  {lat:35.4592,lng:136.7305,name:'名神高速（NEXCO中日本）',url:'https://www.c-nexco.co.jp/traffic/camera/'},
-];
+  var url = 'https://query.wikidata.org/sparql?query=' + encodeURIComponent(sparql) + '&format=json';
 
-function addPublicCams(centerLat, centerLng) {
-  var sorted = PUBLIC_CAMS.slice().sort(function(a,b) {
-    var da = Math.sqrt(Math.pow(a.lat-centerLat,2)+Math.pow(a.lng-centerLng,2));
-    var db = Math.sqrt(Math.pow(b.lat-centerLat,2)+Math.pow(b.lng-centerLng,2));
-    return da-db;
-  });
+  fetch(url, {headers:{'Accept':'application/sparql-results+json'}})
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      var results = data.results.bindings;
+      if (!results || results.length === 0) {
+        showMsg('近くに有名人の出身地データがありません', 3000);
+        return;
+      }
 
-  for (var i=0; i<sorted.length; i++) {
-    var c = sorted[i];
-    var popup = '<div style="font-size:13px;font-weight:bold;color:#333;">📷 '+c.name+'</div>'
-      + '<div style="margin-top:8px;"><a href="'+c.url+'" target="_blank" style="display:block;background:#2563eb;color:#fff;text-align:center;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:bold;text-decoration:none;">▶ カメラを見る</a></div>'
-      + '<div style="font-size:10px;color:#999;margin-top:4px;text-align:center;">外部サイトへ移動</div>';
-    var m = L.marker([c.lat, c.lng], {icon: camIcon}).addTo(map);
-    m.bindPopup(popup, {maxWidth:240});
-    camMarkers.push(m);
-  }
+      // 人物ごとにまとめる
+      var persons = {};
+      for (var i=0; i<results.length; i++) {
+        var r = results[i];
+        var pid = r.person.value;
+        if (!persons[pid]) {
+          persons[pid] = {
+            name: r.personLabel ? r.personLabel.value : '不明',
+            place: r.birthPlaceLabel ? r.birthPlaceLabel.value : '不明',
+            coord: r.coord.value,
+            occupations: []
+          };
+        }
+        if (r.occupationLabel && persons[pid].occupations.indexOf(r.occupationLabel.value) < 0) {
+          persons[pid].occupations.push(r.occupationLabel.value);
+        }
+      }
 
-  camsVisible = true;
-  document.getElementById('btnSpot').style.opacity = '0.5';
-  // 一番近いカメラに地図移動
-  if (sorted.length > 0) {
-    map.setView([sorted[0].lat, sorted[0].lng], 13);
-  }
-  showMsg('📷 '+sorted.length+'件の公開カメラを表示', 3000);
+      var keys = Object.keys(persons);
+      // 場所ごとにグループ化
+      var places = {};
+      for (var i=0; i<keys.length; i++) {
+        var p = persons[keys[i]];
+        var coordMatch = p.coord.match(/Point\(([^ ]+) ([^ )]+)\)/);
+        if (!coordMatch) continue;
+        var plng = parseFloat(coordMatch[1]);
+        var plat = parseFloat(coordMatch[2]);
+        var placeKey = p.place;
+        if (!places[placeKey]) {
+          places[placeKey] = {lat:plat, lng:plng, people:[]};
+        }
+        places[placeKey].people.push(p);
+      }
+
+      var placeKeys = Object.keys(places);
+      for (var i=0; i<placeKeys.length; i++) {
+        var pl = places[placeKeys[i]];
+        var names = pl.people.map(function(p){
+          var occ = p.occupations.length > 0 ? '（'+p.occupations.slice(0,2).join('・')+'）' : '';
+          return '⭐ '+p.name+occ;
+        }).join('<br>');
+
+        var icon = L.divIcon({
+          html: '<div style="background:#d97706;border-radius:50%;width:42px;height:42px;display:flex;align-items:center;justify-content:center;font-size:22px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);">⭐</div>',
+          iconSize:[42,42], iconAnchor:[21,21], className:''
+        });
+
+        var popup = '<div style="font-size:13px;font-weight:bold;color:#333;margin-bottom:6px;">📍 '+placeKeys[i]+'</div>'
+          + '<div style="font-size:12px;color:#444;line-height:1.8;">'+names+'</div>';
+
+        var m = L.marker([pl.lat, pl.lng], {icon:icon}).addTo(map);
+        m.bindPopup(popup, {maxWidth:260});
+        famousMarkers.push(m);
+      }
+
+      famousVisible = true;
+      document.getElementById('btnFamous').style.opacity = '0.5';
+      showMsg('⭐ '+famousMarkers.length+'か所の出身地を表示', 3000);
+    })
+    .catch(function(e) {
+      showMsg('データ取得エラー。通信を確認してください', 3000);
+    });
 }
 
 // 起動時GPS取得 + ルート復元
