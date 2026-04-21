@@ -54,7 +54,7 @@ border-top:1px solid #333;
 #btnTaisho{width:68px;height:52px;border-radius:12px;border:none;background:linear-gradient(135deg,#7e22ce,#581c87);color:#fff;font-size:12px;font-weight:bold;-webkit-appearance:none;cursor:pointer;}
 #btnShowa{width:68px;height:52px;border-radius:12px;border:none;background:linear-gradient(135deg,#374151,#1f2937);color:#fff;font-size:12px;font-weight:bold;-webkit-appearance:none;cursor:pointer;}
 #btnOrt{width:68px;height:52px;border-radius:12px;border:none;background:linear-gradient(135deg,#1d4ed8,#1e3a8a);color:#fff;font-size:12px;font-weight:bold;-webkit-appearance:none;cursor:pointer;}
-#btnLand{width:68px;height:52px;border-radius:12px;border:none;background:linear-gradient(135deg,#15803d,#166534);color:#fff;font-size:11px;font-weight:bold;-webkit-appearance:none;cursor:pointer;}
+#btnFactory{width:68px;height:52px;border-radius:12px;border:none;background:linear-gradient(135deg,#475569,#334155);color:#fff;font-size:11px;font-weight:bold;-webkit-appearance:none;cursor:pointer;}
 #btnClear{width:46px;height:46px;border-radius:12px;border:none;background:#2a2a2a;color:#888;font-size:16px;-webkit-appearance:none;cursor:pointer;}
 </style>
 
@@ -89,7 +89,7 @@ border-top:1px solid #333;
     <button id="btnShowa" onclick="toggleShowa()">終戦直後</button>
     <button id="btnOldMap" onclick="toggleMeiji()">60年代</button>
     <button id="btnOrt" onclick="toggleOrt()">70年代</button>
-    <button id="btnLand" onclick="loadLandPrice()">💰地価</button>
+    <button id="btnFactory" onclick="loadFactory()">🏭工場</button>
     <button id="btnClear" onclick="clearAll()">🗑</button>
   </div>
 </div>
@@ -216,109 +216,93 @@ function toggleOrt() {
   }
 }
 
-// ===== 地価公示 =====
-var landMarkers = [];
-var landVisible = false;
 
-function loadLandPrice() {
-  var btn = document.getElementById('btnLand');
-  if (landVisible) {
-    for (var i=0; i<landMarkers.length; i++) map.removeLayer(landMarkers[i]);
-    landMarkers = [];
-    landVisible = false;
+// ===== 町工場マップ =====
+var factoryMarkers = [];
+var factoryVisible = false;
+
+var factoryIcon = L.divIcon({
+  html: '<div style="font-size:26px;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.5));">🏭</div>',
+  iconSize:[30,30], iconAnchor:[15,15], className:''
+});
+
+function loadFactory() {
+  var btn = document.getElementById('btnFactory');
+  if (factoryVisible) {
+    for (var i=0; i<factoryMarkers.length; i++) map.removeLayer(factoryMarkers[i]);
+    factoryMarkers = [];
+    factoryVisible = false;
     btn.style.opacity = '1';
-    showMsg('地価を非表示', 2000);
+    showMsg('工場マップを非表示', 2000);
     return;
   }
 
   var center = map.getCenter();
   var lat = center.lat, lng = center.lng;
-  showMsg('💰 不動産取引価格を取得中...', 5000);
+  showMsg('🏭 工場・製造業を検索中...', 5000);
 
-  var d = 0.015;
-  var url = 'https://www.land.mlit.go.jp/webland/api/TradeListSearch?'
-    + 'from=20231&to=20234'
-    + '&northLatitude=' + (lat+d).toFixed(6)
-    + '&southLatitude=' + (lat-d).toFixed(6)
-    + '&eastLongitude=' + (lng+d).toFixed(6)
-    + '&westLongitude=' + (lng-d).toFixed(6);
+  var r = 2000; // 2km圏内
+  var query = '[out:json][timeout:15];('
+    + 'node["man_made"="works"](around:'+r+','+lat+','+lng+');'
+    + 'node["industrial"="factory"](around:'+r+','+lat+','+lng+');'
+    + 'way["man_made"="works"](around:'+r+','+lat+','+lng+');'
+    + 'way["landuse"="industrial"](around:'+r+','+lat+','+lng+');'
+    + 'node["craft"](around:'+r+','+lat+','+lng+');'
+    + ');out center body;';
 
-  var xhr = new XMLHttpRequest();
-  xhr.open('GET', url, true);
-  xhr.onload = function() {
-    if (xhr.status === 200) {
-      try {
-        var data = JSON.parse(xhr.responseText);
-        showLandMarkers(data);
-      } catch(e) {
-        showMsg('データ解析エラー', 3000);
+  fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query))
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (!data.elements || data.elements.length === 0) {
+        showMsg('近くに工場データがありません', 3000);
+        return;
       }
-    } else {
-      showMsg('取得エラー: ' + xhr.status, 3000);
-    }
-  };
-  xhr.onerror = function() {
-    // CORS失敗 → jsonpで再試行
-    loadLandPriceJsonp(lat, lng, d);
-  };
-  xhr.send();
-}
 
-function loadLandPriceJsonp(lat, lng, d) {
-  // JSONPフォールバック
-  window._landCallback = function(data) {
-    showLandMarkers(data);
-    delete window._landCallback;
-  };
-  var url = 'https://www.land.mlit.go.jp/webland/api/TradeListSearch?'
-    + 'from=20231&to=20234'
-    + '&northLatitude=' + (lat+d).toFixed(6)
-    + '&southLatitude=' + (lat-d).toFixed(6)
-    + '&eastLongitude=' + (lng+d).toFixed(6)
-    + '&westLongitude=' + (lng-d).toFixed(6)
-    + '&callback=_landCallback';
-  var s = document.createElement('script');
-  s.src = url;
-  s.onerror = function() { showMsg('このAPIはブラウザから直接使えません', 4000); };
-  document.head.appendChild(s);
-}
+      for (var i=0; i<data.elements.length; i++) {
+        var el = data.elements[i];
+        var elLat = el.lat || (el.center && el.center.lat);
+        var elLng = el.lon || (el.center && el.center.lon);
+        if (!elLat || !elLng) continue;
 
-function showLandMarkers(data) {
-  var btn = document.getElementById('btnLand');
-  if (!data.data || data.data.length === 0) {
-    showMsg('この周辺の取引データがありません', 3000);
-    return;
-  }
-  for (var i=0; i<data.data.length; i++) {
-    var d = data.data[i];
-    if (!d.y || !d.x) continue;
-    var price = parseInt(d.TradePrice);
-    if (!price) continue;
-    var area = parseInt(d.Area);
-    var unitPrice = area > 0 ? Math.round(price/area/10000) : 0;
-    var color = unitPrice < 10 ? '#22c55e'
-              : unitPrice < 50 ? '#eab308'
-              : unitPrice < 200 ? '#f97316'
-              : '#ef4444';
-    var label = unitPrice > 0 ? unitPrice+'万/㎡' : Math.round(price/10000)+'万';
-    var icon = L.divIcon({
-      html: '<div style="background:'+color+';color:#fff;border-radius:8px;padding:3px 6px;font-size:10px;font-weight:bold;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,0.4);">'+label+'</div>',
-      iconSize:[null,null], iconAnchor:[20,10], className:''
+        var name = el.tags.name || el.tags['name:ja'] || '名称不明';
+        var type = el.tags.craft || el.tags.industrial || el.tags.man_made || '';
+        var product = el.tags.product || el.tags.goods || '';
+
+        // 業種でアイコンを変える
+        var emoji = '🏭';
+        if (type === 'blacksmith' || type === 'metal_construction') emoji = '⚒️';
+        else if (type === 'carpenter' || type === 'joiner') emoji = '🪵';
+        else if (type === 'electrician') emoji = '⚡';
+        else if (type === 'brewery') emoji = '🍺';
+        else if (type === 'bakery') emoji = '🍞';
+        else if (type === 'printing') emoji = '🖨️';
+
+        var icon = L.divIcon({
+          html: '<div style="font-size:26px;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.5));">'+emoji+'</div>',
+          iconSize:[30,30], iconAnchor:[15,15], className:''
+        });
+
+        var popup = '<div style="font-size:14px;font-weight:bold;color:#333;">'+emoji+' '+name+'</div>'
+          + (type ? '<div style="font-size:11px;color:#666;margin-top:4px;">種別：'+type+'</div>' : '')
+          + (product ? '<div style="font-size:11px;color:#666;">製品：'+product+'</div>' : '');
+
+        var m = L.marker([elLat, elLng], {icon:icon}).addTo(map);
+        m.bindPopup(popup, {maxWidth:240});
+        factoryMarkers.push(m);
+      }
+
+      if (factoryMarkers.length === 0) {
+        showMsg('近くに工場データがありません', 3000);
+        return;
+      }
+
+      factoryVisible = true;
+      btn.style.opacity = '0.5';
+      showMsg('🏭 '+factoryMarkers.length+'件の工場を表示', 3000);
+    })
+    .catch(function() {
+      showMsg('取得エラー。通信を確認してください', 3000);
     });
-    var popup = '<div style="font-size:13px;font-weight:bold;color:#333;">💰 不動産取引</div>'
-      + '<div style="font-size:15px;color:#dc2626;font-weight:bold;margin:4px 0;">'+Math.round(price/10000)+'万円</div>'
-      + (unitPrice>0?'<div style="font-size:12px;color:#f97316;">'+unitPrice+'万円/㎡</div>':'')
-      + '<div style="font-size:11px;color:#666;">種別：'+(d.Type||'')+'</div>'
-      + '<div style="font-size:11px;color:#666;">面積：'+(d.Area||'')+'㎡</div>'
-      + '<div style="font-size:10px;color:#999;">時期：'+(d.Period||'')+'</div>';
-    var m = L.marker([parseFloat(d.y), parseFloat(d.x)], {icon:icon}).addTo(map);
-    m.bindPopup(popup, {maxWidth:240});
-    landMarkers.push(m);
-  }
-  if (landMarkers.length === 0) { showMsg('取引データがありません', 3000); return; }
-  landVisible = true;
-  document.getElementById('btnLand').style.opacity = '0.5';
-  showMsg('💰 '+landMarkers.length+'件の取引価格を表示', 3000);
 }
 
 // ルートライン
