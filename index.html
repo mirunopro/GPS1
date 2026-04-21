@@ -146,13 +146,12 @@ function toggleTaisho() {
     if (reliefVisible) reliefTile.bringToFront();
     showMsg('明治地図を非表示', 2000);
   } else {
-    if (reliefVisible) map.removeLayer(reliefTile);
+    hideRelief();
     if (showaVisible) { map.removeLayer(showaTile); showaVisible = false; document.getElementById('btnShowa').style.opacity='1'; }
     if (meijiVisible) { map.removeLayer(meijiTile); meijiVisible = false; document.getElementById('btnOldMap').style.opacity='1'; }
     if (ortVisible) { map.removeLayer(ortTileLayer); ortVisible = false; document.getElementById('btnOrt').style.opacity='1'; }
     map.removeLayer(modernTile);
     taishoTile.addTo(map);
-    if (reliefVisible) reliefTile.addTo(map);
     taishoVisible = true;
     btn.style.opacity = '0.5';
     showMsg('🗺 明治期の土地利用図に切替', 2500);
@@ -169,13 +168,12 @@ function toggleShowa() {
     if (reliefVisible) reliefTile.bringToFront();
     showMsg('終戦直後の写真を非表示', 2000);
   } else {
-    if (reliefVisible) map.removeLayer(reliefTile);
+    hideRelief();
     if (taishoVisible) { map.removeLayer(taishoTile); taishoVisible = false; document.getElementById('btnTaisho').style.opacity='1'; }
     if (meijiVisible) { map.removeLayer(meijiTile); meijiVisible = false; document.getElementById('btnOldMap').style.opacity='1'; }
     if (ortVisible) { map.removeLayer(ortTileLayer); ortVisible = false; document.getElementById('btnOrt').style.opacity='1'; }
     map.removeLayer(modernTile);
     showaTile.addTo(map);
-    if (reliefVisible) reliefTile.addTo(map);
     showaVisible = true;
     btn.style.opacity = '0.5';
     showMsg('📷 1945〜1950年の空中写真に切替', 2500);
@@ -192,13 +190,12 @@ function toggleMeiji() {
     if (reliefVisible) reliefTile.bringToFront();
     showMsg('昭和初期の写真を非表示', 2000);
   } else {
-    if (reliefVisible) map.removeLayer(reliefTile);
+    hideRelief();
     if (ortVisible) { map.removeLayer(ortTileLayer); ortVisible = false; document.getElementById('btnOrt').style.opacity='1'; }
     if (showaVisible) { map.removeLayer(showaTile); showaVisible = false; document.getElementById('btnShowa').style.opacity='1'; }
     if (taishoVisible) { map.removeLayer(taishoTile); taishoVisible = false; document.getElementById('btnTaisho').style.opacity='1'; }
     map.removeLayer(modernTile);
     meijiTile.addTo(map);
-    if (reliefVisible) reliefTile.addTo(map);
     meijiVisible = true;
     btn.style.opacity = '0.5';
     showMsg('🗺 1961〜1969年の空中写真に切替', 2500);
@@ -215,13 +212,12 @@ function toggleOrt() {
     if (reliefVisible) reliefTile.bringToFront();
     showMsg('空中写真を非表示', 2000);
   } else {
-    if (reliefVisible) map.removeLayer(reliefTile);
+    hideRelief();
     if (meijiVisible) { map.removeLayer(meijiTile); meijiVisible = false; document.getElementById('btnOldMap').style.opacity='1'; }
     if (showaVisible) { map.removeLayer(showaTile); showaVisible = false; document.getElementById('btnShowa').style.opacity='1'; }
     if (taishoVisible) { map.removeLayer(taishoTile); taishoVisible = false; document.getElementById('btnTaisho').style.opacity='1'; }
     map.removeLayer(modernTile);
     ortTileLayer.addTo(map);
-    if (reliefVisible) reliefTile.addTo(map);
     ortVisible = true;
     btn.style.opacity = '0.5';
     showMsg('📷 1974〜1978年の空中写真に切替', 2500);
@@ -229,6 +225,14 @@ function toggleOrt() {
 }
 
 
+
+function hideRelief() {
+  if (reliefVisible) {
+    map.removeLayer(reliefTile);
+    reliefVisible = false;
+    document.getElementById('btnRelief').style.opacity = '1';
+  }
+}
 
 // ===== 色別標高図 =====
 var reliefVisible = false;
@@ -245,7 +249,6 @@ function toggleRelief() {
     showMsg('標高図を非表示', 2000);
   } else {
     reliefTile.addTo(map);
-    reliefTile.bringToFront();
     reliefVisible = true;
     btn.style.opacity = '0.5';
     showMsg('🌋 色別標高図を表示（重ねて表示）', 2500);
