@@ -54,7 +54,7 @@ border-top:1px solid #333;
 #btnTaisho{width:68px;height:52px;border-radius:12px;border:none;background:linear-gradient(135deg,#7e22ce,#581c87);color:#fff;font-size:12px;font-weight:bold;-webkit-appearance:none;cursor:pointer;}
 #btnShowa{width:68px;height:52px;border-radius:12px;border:none;background:linear-gradient(135deg,#374151,#1f2937);color:#fff;font-size:12px;font-weight:bold;-webkit-appearance:none;cursor:pointer;}
 #btnOrt{width:68px;height:52px;border-radius:12px;border:none;background:linear-gradient(135deg,#1d4ed8,#1e3a8a);color:#fff;font-size:12px;font-weight:bold;-webkit-appearance:none;cursor:pointer;}
-#btnNight{width:68px;height:52px;border-radius:12px;border:none;background:linear-gradient(135deg,#1e1b4b,#312e81);color:#fff;font-size:11px;font-weight:bold;-webkit-appearance:none;cursor:pointer;}
+#btnLand{width:68px;height:52px;border-radius:12px;border:none;background:linear-gradient(135deg,#15803d,#166534);color:#fff;font-size:11px;font-weight:bold;-webkit-appearance:none;cursor:pointer;}
 #btnClear{width:46px;height:46px;border-radius:12px;border:none;background:#2a2a2a;color:#888;font-size:16px;-webkit-appearance:none;cursor:pointer;}
 </style>
 
@@ -89,7 +89,7 @@ border-top:1px solid #333;
     <button id="btnShowa" onclick="toggleShowa()">終戦直後</button>
     <button id="btnOldMap" onclick="toggleMeiji()">60年代</button>
     <button id="btnOrt" onclick="toggleOrt()">70年代</button>
-    <button id="btnNight" onclick="toggleNight()">🌙夜間光</button>
+    <button id="btnLand" onclick="loadLandPrice()">💰地価</button>
     <button id="btnClear" onclick="clearAll()">🗑</button>
   </div>
 </div>
@@ -131,12 +131,6 @@ var ortTileLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/gazo1/{z}/{
 });
 var taishoVisible = false;
 var showaVisible = false;
-var nightVisible = false;
-
-// 夜間光マップ（国土地理院）
-var nightTile = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/lum4bl_capital2005/{z}/{x}/{y}.png', {
-  maxZoom:22, maxNativeZoom:14, opacity:1.0
-});
 
 var meijiVisible = false;
 var ortVisible = false;
@@ -222,25 +216,86 @@ function toggleOrt() {
   }
 }
 
-function toggleNight() {
-  var btn = document.getElementById('btnNight');
-  if (nightVisible) {
-    map.removeLayer(nightTile);
-    nightVisible = false;
+// ===== 地価公示 =====
+var landMarkers = [];
+var landVisible = false;
+
+function loadLandPrice() {
+  var btn = document.getElementById('btnLand');
+  if (landVisible) {
+    for (var i=0; i<landMarkers.length; i++) map.removeLayer(landMarkers[i]);
+    landMarkers = [];
+    landVisible = false;
     btn.style.opacity = '1';
-    if (!taishoVisible && !showaVisible && !meijiVisible && !ortVisible) modernTile.addTo(map);
-    showMsg('夜間光を非表示', 2000);
-  } else {
-    if (taishoVisible) { map.removeLayer(taishoTile); taishoVisible = false; document.getElementById('btnTaisho').style.opacity='1'; }
-    if (showaVisible) { map.removeLayer(showaTile); showaVisible = false; document.getElementById('btnShowa').style.opacity='1'; }
-    if (meijiVisible) { map.removeLayer(meijiTile); meijiVisible = false; document.getElementById('btnOldMap').style.opacity='1'; }
-    if (ortVisible) { map.removeLayer(ortTileLayer); ortVisible = false; document.getElementById('btnOrt').style.opacity='1'; }
-    map.removeLayer(modernTile);
-    nightTile.addTo(map);
-    nightVisible = true;
-    btn.style.opacity = '0.5';
-    showMsg('🌙 夜間光マップ（国土地理院）に切替', 2500);
+    showMsg('地価を非表示', 2000);
+    return;
   }
+
+  var center = map.getCenter();
+  var lat = center.lat, lng = center.lng;
+  showMsg('💰 地価を取得中...', 4000);
+
+  // 国土交通省 不動産情報ライブラリ 地価公示API
+  // 緯度経度から2km四方の地価公示データを取得
+  var d = 0.02; // 約2km
+  var url = 'https://www.reinfolib.mlit.go.jp/ex-api/external/XIT001?'
+    + 'responseType=json'
+    + '&from=2024'
+    + '&to=2024'
+    + '&northLatitude=' + (lat+d)
+    + '&southLatitude=' + (lat-d)
+    + '&eastLongitude=' + (lng+d)
+    + '&westLongitude=' + (lng-d);
+
+  fetch(url)
+    .then(function(res){ return res.json(); })
+    .then(function(data) {
+      if (!data.data || data.data.length === 0) {
+        showMsg('この周辺の地価データがありません', 3000);
+        return;
+      }
+
+      for (var i=0; i<data.data.length; i++) {
+        var d = data.data[i];
+        if (!d.latitude || !d.longitude) continue;
+        var price = parseInt(d.price);
+        var priceM2 = Math.round(price/10000); // 万円/㎡
+
+        // 価格で色分け
+        var color = price < 100000 ? '#22c55e'
+                  : price < 300000 ? '#eab308'
+                  : price < 1000000 ? '#f97316'
+                  : '#ef4444';
+
+        var icon = L.divIcon({
+          html: '<div style="background:'+color+';color:#fff;border-radius:8px;padding:3px 5px;font-size:10px;font-weight:bold;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,0.4);">'+priceM2+'万</div>',
+          iconSize: [null, null],
+          iconAnchor: [20, 10],
+          className: ''
+        });
+
+        var popup = '<div style="font-size:13px;font-weight:bold;color:#333;">💰 地価公示</div>'
+          + '<div style="font-size:15px;color:#dc2626;font-weight:bold;margin:4px 0;">'+(priceM2)+'万円/㎡</div>'
+          + '<div style="font-size:11px;color:#666;">'+(d.address||'')+'</div>'
+          + '<div style="font-size:10px;color:#999;margin-top:2px;">用途：'+(d.category||'')+'</div>';
+
+        var m = L.marker([parseFloat(d.latitude), parseFloat(d.longitude)], {icon:icon}).addTo(map);
+        m.bindPopup(popup, {maxWidth:240});
+        landMarkers.push(m);
+      }
+
+      if (landMarkers.length === 0) {
+        showMsg('この周辺の地価データがありません', 3000);
+        return;
+      }
+
+      landVisible = true;
+      btn.style.opacity = '0.5';
+      showMsg('💰 '+landMarkers.length+'件の地価を表示', 3000);
+    })
+    .catch(function() {
+      showMsg('地価データ取得エラー', 3000);
+    });
 }
 
 // ルートライン
