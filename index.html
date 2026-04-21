@@ -300,8 +300,8 @@ var camsVisible = false;
 // 公開ライブカメラデータ（国交省・気象庁・河川）
 // ※実際のカメラはOpenStreetMapのman_made=surveillance(public)タグから取得
 var camIcon = L.divIcon({
-  html: '<div style="font-size:22px;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.6));">📷</div>',
-  iconSize: [28,28], iconAnchor: [14,14], className:''
+  html: '<div style="background:#2563eb;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:22px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);">📷</div>',
+  iconSize: [40,40], iconAnchor: [20,20], className:''
 });
 
 function loadCams() {
