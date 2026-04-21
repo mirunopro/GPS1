@@ -3,7 +3,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>散歩記録</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <style>
@@ -97,12 +97,16 @@ var map = L.map('mapDiv', {
   center: [35.6812, 139.7671],
   zoom: 17,
   zoomControl: true,
-  attributionControl: false
+  attributionControl: false,
+  maxZoom: 22,
+  zoomSnap: 0.5,
+  wheelPxPerZoomLevel: 60
 });
 
 // タイルレイヤー（現代・古地図切替）
 var modernTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19
+  maxZoom: 22,
+  maxNativeZoom: 19
 });
 var oldTile = null;
 
