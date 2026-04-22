@@ -285,25 +285,22 @@ function doSearch() {
 
   showMsg('🔍 検索中...', 3000);
 
-  var url = 'https://msearch.gsi.go.jp/address-search/AddressSearch?q=' + encodeURIComponent(q);
+  // Nominatim（OpenStreetMap）- 日本優先・駅名対応
+  var url = 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q)
+    + '&format=json&limit=5&countrycodes=jp&accept-language=ja';
 
-  fetch(url)
+  fetch(url, {headers:{'Accept-Language':'ja'}})
     .then(function(r){ return r.json(); })
     .then(function(data) {
       if (!data || data.length === 0) {
         showMsg('見つかりませんでした', 3000);
         return;
       }
-      // 都道府県・政令市・市区町村を優先（townよりcityを優先）
       var result = data[0];
-      for (var i = 0; i < data.length; i++) {
-        var t = data[i].properties.addressType;
-        if (t === '市区町村' || t === '都道府県') { result = data[i]; break; }
-      }
-      var lng = parseFloat(result.geometry.coordinates[0]);
-      var lat = parseFloat(result.geometry.coordinates[1]);
-      var name = result.properties.title;
-      map.setView([lat, lng], 13, {animate: true});
+      var lat = parseFloat(result.lat);
+      var lng = parseFloat(result.lon);
+      var name = result.display_name.split(',')[0];
+      map.setView([lat, lng], 15, {animate: true});
       showMsg('📍 ' + name, 3000);
       document.getElementById('searchInput').blur();
     })
