@@ -22,7 +22,24 @@ body{display:flex;flex-direction:column;background:#111;color:#fff;font-family:'
 .dot.on{background:#4ade80;animation:bl 1.5s infinite;}
 @keyframes bl{0%,100%{opacity:1;}50%{opacity:0.2;}}
 
-#msgBox{position:absolute;top:52px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);border-radius:20px;padding:7px 18px;font-size:13px;white-space:nowrap;pointer-events:none;z-index:1000;opacity:0;transition:opacity 0.3s;max-width:90%;text-align:center;}
+#msgBox{position:absolute;top:90px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);border-radius:20px;padding:7px 18px;font-size:13px;white-space:nowrap;pointer-events:none;z-index:1000;opacity:0;transition:opacity 0.3s;max-width:90%;text-align:center;}
+
+/* 検索バー */
+#searchBar{
+position:absolute;top:52px;left:12px;right:12px;
+display:flex;gap:6px;z-index:1000;
+}
+#searchInput{
+flex:1;height:36px;border-radius:10px;border:none;
+padding:0 12px;font-size:14px;
+background:rgba(255,255,255,0.95);color:#333;
+-webkit-appearance:none;outline:none;
+}
+#searchBtn{
+height:36px;padding:0 14px;border-radius:10px;border:none;
+background:#22c55e;color:#fff;font-size:13px;font-weight:bold;
+-webkit-appearance:none;cursor:pointer;white-space:nowrap;
+}
 
 /* リアルタイム速度表示 */
 #spdBig{
@@ -65,6 +82,10 @@ border-top:1px solid #333;
   <div id="topBar">
     <div class="badge" id="michi">🛰 みちびき対応GPS</div>
     <div class="badge" id="gpsB"><div class="dot" id="gpsDot"></div><span id="gpsT">GPS待機</span></div>
+  </div>
+  <div id="searchBar">
+    <input id="searchInput" type="text" placeholder="🔍 都市・住所を検索..." />
+    <button id="searchBtn" onclick="doSearch()">移動</button>
   </div>
   <div id="msgBox"></div>
   <div id="spdBig">
@@ -255,7 +276,44 @@ function toggleRelief() {
   }
 }
 
-// ルートライン
+// ===== 都市・住所検索 =====
+function doSearch() {
+  var q = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+
+  showMsg('🔍 検索中...', 3000);
+
+  // 国土地理院ジオコーダAPI
+  var url = 'https://msearch.gsi.go.jp/address-search/AddressSearch?q=' + encodeURIComponent(q);
+
+  fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (!data || data.length === 0) {
+        showMsg('見つかりませんでした', 3000);
+        return;
+      }
+      var result = data[0];
+      var lng = parseFloat(result.geometry.coordinates[0]);
+      var lat = parseFloat(result.geometry.coordinates[1]);
+      var name = result.properties.title;
+      map.setView([lat, lng], 14, {animate: true});
+      showMsg('📍 ' + name, 3000);
+      document.getElementById('searchInput').blur();
+    })
+    .catch(function() {
+      showMsg('検索エラー', 3000);
+    });
+}
+
+// Enterキーで検索
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('searchInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doSearch();
+  });
+});
+
+
 var routeLine = L.polyline([], {
   color: '#22c55e',
   weight: 5,
